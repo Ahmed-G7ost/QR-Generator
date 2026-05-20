@@ -661,3 +661,4 @@ export default function QrStyleCustomizer({ config, updateConfig, t }) {
     </div>
   );
 }
+
