@@ -26,4 +26,3 @@ const DEFAULT_CONFIG = {
   qr_frame_width: 2,
   qr_bg_shape: "none",
 };
-
