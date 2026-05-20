@@ -52,22 +52,6 @@ const DEFAULT_CONFIG = {
   show_qr: false, qr_x: 50, qr_y: 75, qr_size: 25,
   qr_content: "username",
   custom_font: null,
-  // QR Style
-  qr_fg_color: "#000000",
-  qr_bg_color: "#ffffff",
-  qr_dot_style: "square",
-  qr_eye_color: "",
-  qr_use_gradient: false,
-  qr_gradient_color1: "#000000",
-  qr_gradient_color2: "#0066ff",
-  qr_gradient_type: "linear",
-  qr_logo: null,
-  qr_logo_size: 20,
-  qr_fg_image: null,
-  qr_frame: false,
-  qr_frame_color: "#000000",
-  qr_frame_width: 2,
-  qr_bg_shape: "none",
 };
 
 const cardInitial = {
