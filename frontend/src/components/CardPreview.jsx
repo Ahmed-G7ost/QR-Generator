@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
+import { drawStyledQr } from "./QrStyleCustomizer";
 
 // Elements that can be dragged
 const ELEMENTS = [
@@ -12,8 +13,30 @@ const ELEMENTS = [
 export default function CardPreview({ templateUrl, sampleRecord, config, onPositionChange, t }) {
   const canvasRef = useRef(null);
   const imgRef = useRef(null);
-  const [dragging, setDragging] = useState(null); // element key being dragged
+  const [dragging, setDragging] = useState(null);
   const [hovered, setHovered] = useState(null);
+  const logoImgRef = useRef(null);
+  const fgImgRef = useRef(null);
+
+  // Load logo image for preview
+  useEffect(() => {
+    if (!config.qr_logo) { logoImgRef.current = null; return; }
+    const url = URL.createObjectURL(config.qr_logo);
+    const img = new window.Image();
+    img.onload = () => { logoImgRef.current = img; };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [config.qr_logo]);
+
+  // Load fg texture image for preview
+  useEffect(() => {
+    if (!config.qr_fg_image) { fgImgRef.current = null; return; }
+    const url = URL.createObjectURL(config.qr_fg_image);
+    const img = new window.Image();
+    img.onload = () => { fgImgRef.current = img; };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [config.qr_fg_image]);
 
   const c = useMemo(() => ({
     username_font_size: config.username_font_size, password_font_size: config.password_font_size,
@@ -29,14 +52,21 @@ export default function CardPreview({ templateUrl, sampleRecord, config, onPosit
     date_color: config.date_color || "#000000",
     label_color: config.label_color || "#000000",
     show_qr: config.show_qr, qr_x: config.qr_x, qr_y: config.qr_y, qr_size: config.qr_size,
-  }), [
-    config.username_font_size, config.password_font_size, config.date_font_size, config.label_font_size,
-    config.username_x, config.username_y, config.password_x, config.password_y,
-    config.date_x, config.date_y, config.label_x, config.label_y,
-    config.show_date, config.date_text, config.label_text, config.show_counter,
-    config.username_color, config.password_color, config.date_color, config.label_color,
-    config.show_qr, config.qr_x, config.qr_y, config.qr_size,
-  ]);
+    // QR style
+    qr_fg_color: config.qr_fg_color || "#000000",
+    qr_bg_color: config.qr_bg_color || "#ffffff",
+    qr_dot_style: config.qr_dot_style || "square",
+    qr_eye_color: config.qr_eye_color || "",
+    qr_use_gradient: config.qr_use_gradient || false,
+    qr_gradient_color1: config.qr_gradient_color1 || "#000000",
+    qr_gradient_color2: config.qr_gradient_color2 || "#0066ff",
+    qr_gradient_type: config.qr_gradient_type || "linear",
+    qr_frame: config.qr_frame || false,
+    qr_frame_color: config.qr_frame_color || "#000000",
+    qr_frame_width: config.qr_frame_width || 2,
+    qr_bg_shape: config.qr_bg_shape || "none",
+    qr_logo_size: config.qr_logo_size || 20,
+  }), [config]);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -89,57 +119,25 @@ export default function CardPreview({ templateUrl, sampleRecord, config, onPosit
       drawEl("label", c.label_text, c.label_x, c.label_y, c.label_font_size, c.label_color);
     }
 
-    // QR placeholder - draw a realistic QR code pattern
+    // QR — use styled drawing
     if (c.show_qr) {
       const qrDim = Math.round(Math.min(w, h) * c.qr_size / 100);
       const qrCx = (c.qr_x / 100) * w, qrCy = (c.qr_y / 100) * h;
       const qx = qrCx - qrDim / 2, qy = qrCy - qrDim / 2;
-      
-      // Draw white background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(qx, qy, qrDim, qrDim);
-      
-      // Draw QR code pattern (realistic 21x21 QR)
-      const modules = 21;
-      const cellSize = qrDim / (modules + 2); // +2 for quiet zone
-      const offset = cellSize; // quiet zone
-      
-      ctx.fillStyle = "#000000";
-      
-      // Position detection patterns (3 corners)
-      const drawFinderPattern = (px, py) => {
-        // Outer 7x7 black
-        ctx.fillRect(px, py, cellSize * 7, cellSize * 7);
-        // Inner 5x5 white
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(px + cellSize, py + cellSize, cellSize * 5, cellSize * 5);
-        // Inner 3x3 black
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(px + cellSize * 2, py + cellSize * 2, cellSize * 3, cellSize * 3);
-      };
-      
-      // Top-left finder
-      drawFinderPattern(qx + offset, qy + offset);
-      // Top-right finder
-      drawFinderPattern(qx + offset + cellSize * 14, qy + offset);
-      // Bottom-left finder
-      drawFinderPattern(qx + offset, qy + offset + cellSize * 14);
-      
-      // Draw some random data modules for visual effect
-      ctx.fillStyle = "#000000";
-      const dataPattern = [
-        [8, 8], [9, 8], [10, 8], [12, 8],
-        [8, 9], [11, 9], [13, 9],
-        [8, 10], [9, 10], [12, 10], [14, 10],
-        [8, 11], [10, 11], [11, 11], [13, 11],
-        [8, 12], [9, 12], [14, 12],
-        [10, 13], [12, 13], [13, 13],
-        [9, 14], [11, 14], [14, 14],
-      ];
-      dataPattern.forEach(([col, row]) => {
-        ctx.fillRect(qx + offset + col * cellSize, qy + offset + row * cellSize, cellSize, cellSize);
+
+      drawStyledQr(ctx, sampleRecord?.username || "SAMPLE123", {
+        width: qrDim, height: qrDim, x: qx, y: qy,
+        fgColor: c.qr_fg_color, bgColor: c.qr_bg_color,
+        dotStyle: c.qr_dot_style, eyeColor: c.qr_eye_color,
+        useGradient: c.qr_use_gradient,
+        gradientColor1: c.qr_gradient_color1, gradientColor2: c.qr_gradient_color2,
+        gradientType: c.qr_gradient_type,
+        frame: c.qr_frame, frameColor: c.qr_frame_color, frameWidth: c.qr_frame_width,
+        bgShape: c.qr_bg_shape,
+        logoImg: logoImgRef.current, logoSize: c.qr_logo_size,
+        fgImage: fgImgRef.current,
       });
-      
+
       // Border highlight if hovered/dragging
       if (hovered === "qr" || dragging === "qr") {
         ctx.strokeStyle = "#22d3ee";
