@@ -86,6 +86,8 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
   const [templates, setTemplates] = useState([]);
   const [templateName, setTemplateName] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
+  const [customCols, setCustomCols] = useState(3);
+  const [customRows, setCustomRows] = useState(8);
 
   useEffect(() => { setTemplates(loadSavedTemplates()); }, []);
 
@@ -179,7 +181,49 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
                   <span className="text-[10px] text-white/40">{opt.desc} cards</span>
                 </button>
               ))}
+              {/* Custom option */}
+              <button
+                data-testid="grid-option-custom"
+                onClick={() => updateConfig("grid", `${customCols}x${customRows}`)}
+                className={`rounded-xl border p-3 text-center transition-all ${
+                  !GRID_OPTIONS.find((o) => o.value === config.grid)
+                    ? "border-cyan-400/60 bg-cyan-400/10 text-white"
+                    : "border-white/10 bg-white/[0.02] text-white/60 hover:border-white/20"}`}>
+                <span className="font-mono font-bold text-sm block">{t.customGrid}</span>
+                <span className="text-[10px] text-white/40">{customCols * customRows} {t.customGridCardsPerPage}</span>
+              </button>
             </div>
+            {/* Custom grid inputs — shown only when custom is selected */}
+            {!GRID_OPTIONS.find((o) => o.value === config.grid) && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-semibold">{t.customGridCols}</label>
+                  <input
+                    type="number" min={1} max={20} value={customCols}
+                    data-testid="custom-grid-cols"
+                    onChange={(e) => {
+                      const v = Math.max(1, Math.min(20, parseInt(e.target.value) || 1));
+                      setCustomCols(v);
+                      updateConfig("grid", `${v}x${customRows}`);
+                    }}
+                    className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-cyan-400/50 text-center"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-semibold">{t.customGridRows}</label>
+                  <input
+                    type="number" min={1} max={20} value={customRows}
+                    data-testid="custom-grid-rows"
+                    onChange={(e) => {
+                      const v = Math.max(1, Math.min(20, parseInt(e.target.value) || 1));
+                      setCustomRows(v);
+                      updateConfig("grid", `${customCols}x${v}`);
+                    }}
+                    className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-cyan-400/50 text-center"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Custom Font */}

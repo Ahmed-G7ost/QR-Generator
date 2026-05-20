@@ -121,6 +121,10 @@ export const translations = {
     fontHint: "Upload TTF or OTF font file",
     dragHint: "Click & drag elements to reposition them on the card",
     directLogin: "Direct Login",
+    customGrid: "Custom",
+    customGridCols: "Columns",
+    customGridRows: "Rows",
+    customGridCardsPerPage: "cards/page",
   },
   ar: {
     dir: "rtl",
@@ -244,5 +248,9 @@ export const translations = {
     fontHint: "ارفع ملف خط TTF أو OTF",
     dragHint: "اضغط واسحب العناصر لتغيير موضعها على البطاقة",
     directLogin: "تسجيل مباشر",
+    customGrid: "مخصص",
+    customGridCols: "الأعمدة",
+    customGridRows: "الصفوف",
+    customGridCardsPerPage: "بطاقة/صفحة",
   },
 };
