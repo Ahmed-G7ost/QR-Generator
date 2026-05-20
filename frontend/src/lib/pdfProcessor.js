@@ -106,7 +106,8 @@ export async function extractDataset(sourcePdfFile, cancelToken, onPageProgress)
  * Process everything end-to-end and return the final merged PDF.
  *
  * @param {Object} opts
- * @param {File} opts.sourcePdfFile
+ * @param {File|File[]} opts.sourcePdfFile   — single file OR array of source PDFs
+ * @param {File[]}      [opts.sourcePdfFiles] — array of source PDFs (alternative key)
  * @param {File} opts.designPdfFile
  * @param {string} opts.server
  * @param {number} opts.totalCards
@@ -119,6 +120,7 @@ export async function extractDataset(sourcePdfFile, cancelToken, onPageProgress)
  */
 export async function processPdfs({
   sourcePdfFile,
+  sourcePdfFiles,
   designPdfFile,
   server,
   totalCards,
@@ -127,26 +129,41 @@ export async function processPdfs({
   cancelToken = new CancelToken(),
   onProgress = () => {},
 }) {
-  if (!sourcePdfFile || !designPdfFile) throw new Error("PDF files missing!");
+  // Normalise to an array (backward-compatible)
+  const sourceFiles = sourcePdfFiles
+    ? sourcePdfFiles
+    : Array.isArray(sourcePdfFile)
+    ? sourcePdfFile
+    : [sourcePdfFile];
+
+  if (!sourceFiles || sourceFiles.length === 0 || !sourceFiles[0]) throw new Error("PDF files missing!");
+  if (!designPdfFile) throw new Error("PDF files missing!");
   if (!server) throw new Error("Server address is required");
   if (!totalCards || !cols || !rows) {
     throw new Error("Total cards / columns / rows are required");
   }
 
-  // -------------------- PHASE 1: EXTRACT --------------------
+  // -------------------- PHASE 1: EXTRACT (from all source files) --------------------
   onProgress({ phase: PHASES.EXTRACTING, percent: 0, current: 0, total: 0 });
-  const dataset = await extractDataset(sourcePdfFile, cancelToken, (cur, total) => {
-    onProgress({
-      phase: PHASES.EXTRACTING,
-      percent: Math.floor((cur / total) * 100),
-      current: cur,
-      total,
+  const dataset = [];
+  for (let fi = 0; fi < sourceFiles.length; fi++) {
+    const partial = await extractDataset(sourceFiles[fi], cancelToken, (cur, total) => {
+      // Spread progress across all files
+      const fileOffset = fi / sourceFiles.length;
+      const fileWeight = 1 / sourceFiles.length;
+      onProgress({
+        phase: PHASES.EXTRACTING,
+        percent: Math.floor((fileOffset + (cur / total) * fileWeight) * 100),
+        current: dataset.length + cur,
+        total: 0,
+      });
     });
-  });
+    dataset.push(...partial);
+  }
   cancelToken.throwIfCancelled();
 
   if (dataset.length === 0) {
-    throw new Error("No (12-digit, 6-digit) pairs found in source PDF");
+    throw new Error("No (12-digit, 6-digit) pairs found in source PDF(s)");
   }
   const totalItems = dataset.length;
 

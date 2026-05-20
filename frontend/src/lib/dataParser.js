@@ -103,17 +103,42 @@ function legacyRegexParse(allTokens) {
   return records;
 }
 
+/* ——— helper: safely convert an Excel cell value to a plain string ——— */
+function cellToStr(cell) {
+  if (cell === null || cell === undefined || cell === "") return "";
+  if (typeof cell === "number") {
+    if (!isFinite(cell)) return "";
+    // Integers: direct conversion (no scientific notation for values up to ~9e15)
+    if (Number.isInteger(cell)) return String(cell);
+    // Non-integer numbers: round to remove floating-point artefacts (e.g. 123456789012.0000001)
+    return String(Math.round(cell));
+  }
+  return String(cell).trim();
+}
+
+/* ——— helper: detect the two all-numeric columns; longer avg = username ——— */
+function detectNumericCols(rows) {
+  if (!rows.length) return null;
+  const colCount = Math.max(...rows.map((r) => r.length));
+  const numericCols = [];
+  for (let c = 0; c < colCount; c++) {
+    const vals = rows.map((r) => cellToStr(r[c])).filter((v) => v !== "");
+    if (vals.length > 0 && vals.every((v) => /^\d+$/.test(v))) {
+      const avgLen = vals.reduce((s, v) => s + v.length, 0) / vals.length;
+      numericCols.push({ idx: c, avgLen });
+    }
+  }
+  if (numericCols.length < 2) return null;
+  numericCols.sort((a, b) => b.avgLen - a.avgLen); // longer first → username
+  return { userIdx: numericCols[0].idx, passIdx: numericCols[1].idx };
+}
+
 /* --------------------------- Excel / CSV parsing ------------------------- */
 async function parseExcel(file) {
   const buf = await file.arrayBuffer();
-  // Use cellText:true so XLSX preserves the formatted text of each cell
-  // (avoids floating-point corruption of long numeric IDs like 12-digit usernames).
-  // cellDates:false prevents date serial numbers from being parsed incorrectly.
-  const wb = XLSX.read(buf, { type: "array", cellText: true, cellDates: false });
+  const wb = XLSX.read(buf, { type: "array" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  // raw:false  → use the formatted text (.w) instead of the raw JS number (.v)
-  // defval:""  → fill empty cells with an empty string
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
   return rowsToRecords(rows);
 }
 
@@ -126,30 +151,40 @@ async function parseCsv(file) {
 function rowsToRecords(rows) {
   if (!rows || rows.length === 0) return [];
 
+  // Normalise every cell to a plain string first
+  const strRows = rows.map((row) => (Array.isArray(row) ? row.map(cellToStr) : []));
+
   // Detect header row by checking if first row contains user/pass keywords.
-  const first = rows[0].map((c) => String(c).toLowerCase().trim());
+  const first = strRows[0].map((c) => c.toLowerCase());
   const userKeywords = ["user", "اسم", "name", "username"];
   const passKeywords = ["pass", "كلمة", "pwd", "password"];
 
   let userIdx = first.findIndex((c) => userKeywords.some((k) => c.includes(k)));
   let passIdx = first.findIndex((c) => passKeywords.some((k) => c.includes(k)));
 
-  let dataRows = rows;
+  let dataRows;
   if (userIdx !== -1 || passIdx !== -1) {
-    dataRows = rows.slice(1);
+    // Header row found via keywords
+    dataRows = strRows.slice(1);
     if (userIdx === -1) userIdx = 0;
     if (passIdx === -1) passIdx = 1;
   } else {
-    userIdx = 0;
-    passIdx = 1;
+    // No keyword header — use smart numeric-column detection (same logic as PDF parser)
+    dataRows = strRows;
+    const detected = detectNumericCols(dataRows);
+    if (detected) {
+      userIdx = detected.userIdx;
+      passIdx = detected.passIdx;
+    } else {
+      userIdx = 0;
+      passIdx = 1;
+    }
   }
 
   const records = [];
   for (const r of dataRows) {
-    // Strip commas/spaces that Excel may add when formatting large numbers
-    // e.g. "1,234,567,890" → "1234567890"
-    const u = String(r[userIdx] ?? "").trim().replace(/[\s,]/g, "");
-    const p = String(r[passIdx] ?? "").trim().replace(/[\s,]/g, "");
+    const u = (r[userIdx] ?? "").trim();
+    const p = (r[passIdx] ?? "").trim();
     if (u && u !== "nan") {
       records.push({ username: u, password: p === "nan" ? "" : p });
     }
@@ -165,6 +200,17 @@ export async function parseDataFile(file) {
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) return parseExcel(file);
   if (name.endsWith(".csv")) return parseCsv(file);
   throw new Error("صيغة غير مدعومة. استخدم Excel (.xlsx) أو CSV أو PDF.");
+}
+
+/** Parse multiple files and merge all records into one array. */
+export async function parseDataFiles(files) {
+  if (!files || files.length === 0) throw new Error("لم يتم اختيار ملفات.");
+  const allRecords = [];
+  for (const file of files) {
+    const records = await parseDataFile(file);
+    allRecords.push(...records);
+  }
+  return allRecords;
 }
 
 export async function readTemplateImage(file) {

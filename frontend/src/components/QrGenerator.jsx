@@ -8,23 +8,30 @@ import {
 } from "@/lib/pdfProcessor";
 
 /* ----------------------------- File drop zone ----------------------------- */
-const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) => {
+const Dropzone = ({ title, hint, files, onFiles, onRemove, t, testId, accent, disabled, multiple = false }) => {
   const inputRef = useRef(null);
   const [over, setOver] = useState(false);
 
-  const handle = (f) => {
-    if (!f || disabled) return;
-    if (!f.name.toLowerCase().endsWith(".pdf")) return;
-    onFile(f);
+  const handle = (fileList) => {
+    if (!fileList || fileList.length === 0 || disabled) return;
+    const validFiles = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith(".pdf"));
+    if (validFiles.length === 0) return;
+    // Always append; parent decides accumulation vs replace
+    onFiles(multiple ? validFiles : [validFiles[0]]);
   };
+
+  const fileArr = files || [];
 
   return (
     <div
       data-testid={testId}
       onDragOver={(e) => { if (disabled) return; e.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
-      onDrop={(e) => { if (disabled) return; e.preventDefault(); setOver(false); handle(e.dataTransfer.files?.[0]); }}
-      onClick={() => !disabled && inputRef.current?.click()}
+      onDrop={(e) => { if (disabled) return; e.preventDefault(); setOver(false); handle(e.dataTransfer.files); }}
+      onClick={(e) => {
+        if (e.target.closest("[data-remove-btn]")) return;
+        if (!disabled) inputRef.current?.click();
+      }}
       className={`group relative rounded-2xl border border-white/10 bg-white/[0.02] p-5 transition-all ${
         disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-white/[0.04] hover:border-white/20"
       } ${over ? "border-cyan-400/60 bg-cyan-400/5" : ""}`}
@@ -40,15 +47,34 @@ const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) =>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-white font-semibold text-base">{title}</h3>
-            <span className="text-[10px] tracking-[0.2em] uppercase text-white/40">PDF</span>
+            <span className="text-[10px] tracking-[0.2em] uppercase text-white/40">PDF{multiple ? " ×N" : ""}</span>
           </div>
           <p className="text-sm text-white/50 mt-1">{hint}</p>
-          {file ? (
-            <div data-testid={`${testId}-selected`} className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-400/10 border border-emerald-400/30 px-3 py-2">
-              <span className="text-emerald-300 text-sm font-medium truncate" title={file.name}>
-                ✓ {file.name}
-              </span>
-              <span className="text-emerald-200/60 text-xs ms-auto">{(file.size / 1024).toFixed(1)} KB</span>
+          {fileArr.length > 0 ? (
+            <div className="mt-3 space-y-1.5">
+              {fileArr.map((f, i) => (
+                <div key={i} data-testid={`${testId}-selected-${i}`} className="flex items-center gap-2 rounded-lg bg-emerald-400/10 border border-emerald-400/30 px-3 py-2">
+                  <span className="text-emerald-300 text-sm font-medium truncate" title={f.name}>
+                    ✓ {f.name}
+                  </span>
+                  <span className="text-emerald-200/60 text-xs ms-2">{(f.size / 1024).toFixed(1)} KB</span>
+                  {onRemove && (
+                    <button
+                      data-remove-btn="true"
+                      data-testid={`${testId}-remove-${i}`}
+                      onClick={(e) => { e.stopPropagation(); onRemove(i); }}
+                      className="ms-auto flex-shrink-0 h-5 w-5 rounded-full bg-rose-400/20 border border-rose-400/40 text-rose-300 hover:bg-rose-400/40 transition flex items-center justify-center"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+              {multiple && (
+                <div className="mt-1 text-xs text-white/40 text-center">+ أضف ملفات إضافية</div>
+              )}
             </div>
           ) : (
             <div className="mt-3 flex items-center gap-3 text-xs text-white/40">
@@ -59,7 +85,8 @@ const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) =>
           )}
         </div>
       </div>
-      <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" disabled={disabled} onChange={(e) => handle(e.target.files?.[0])} data-testid={`${testId}-input`} />
+      <input ref={inputRef} type="file" accept="application/pdf,.pdf" multiple={multiple} className="hidden" disabled={disabled}
+        onChange={(e) => { handle(e.target.files); e.target.value = ""; }} data-testid={`${testId}-input`} />
     </div>
   );
 };
@@ -109,8 +136,8 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
 
 /* ------------------------------- QR Generator ------------------------------ */
 export default function QrGenerator({ t, lang }) {
-  const [sourcePdf, setSourcePdf] = useState(null);
-  const [designPdf, setDesignPdf] = useState(null);
+  const [sourcePdfs, setSourcePdfs] = useState([]);
+  const [designPdfs, setDesignPdfs] = useState([]);
   const [server, setServer] = useState("");
   const [totalCards, setTotalCards] = useState(8);
   const [cols, setCols] = useState(2);
@@ -122,8 +149,17 @@ export default function QrGenerator({ t, lang }) {
   const [cancelled, setCancelled] = useState(false);
   const cancelTokenRef = useRef(null);
 
+  // Append new source PDFs (don't replace)
+  const addSourcePdfs = useCallback((newFiles) => {
+    setSourcePdfs(prev => [...prev, ...newFiles]);
+  }, []);
+
+  const removeSourcePdf = useCallback((index) => {
+    setSourcePdfs(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   const resetAll = useCallback(() => {
-    setSourcePdf(null); setDesignPdf(null); setServer(""); setTotalCards(8); setCols(2); setRows(4);
+    setSourcePdfs([]); setDesignPdfs([]); setServer(""); setTotalCards(8); setCols(2); setRows(4);
     setStatus({ phase: null, message: "", percent: 0, current: 0, total: 0, workers: 0 });
     setProcessing(false); setResult(null); setError(""); setCancelled(false); cancelTokenRef.current = null;
   }, []);
@@ -136,14 +172,14 @@ export default function QrGenerator({ t, lang }) {
 
   const handleStart = useCallback(async () => {
     setError(""); setResult(null); setCancelled(false);
-    if (!sourcePdf || !designPdf || !server || !totalCards || !cols || !rows) { setError(t.errorMissing); return; }
+    if (!sourcePdfs.length || !designPdfs.length || !server || !totalCards || !cols || !rows) { setError(t.errorMissing); return; }
     setProcessing(true);
     setStatus({ phase: PHASES.EXTRACTING, message: t.processing, percent: 0, current: 0, total: 0, workers: 0 });
     const cancelToken = new CancelToken();
     cancelTokenRef.current = cancelToken;
     try {
       const { pdfBytes, filename, itemsCount } = await processPdfs({
-        sourcePdfFile: sourcePdf, designPdfFile: designPdf, server: server.trim(),
+        sourcePdfFiles: sourcePdfs, designPdfFile: designPdfs[0], server: server.trim(),
         totalCards: parseInt(totalCards, 10), cols: parseInt(cols, 10), rows: parseInt(rows, 10),
         cancelToken, onProgress: (p) => setStatus((s) => ({ ...s, ...p })),
       });
@@ -153,7 +189,7 @@ export default function QrGenerator({ t, lang }) {
       if (isCancelledError(e)) { resetAll(); return; }
       console.error(e); setError(e.message || t.errorGeneric);
     } finally { setProcessing(false); cancelTokenRef.current = null; }
-  }, [sourcePdf, designPdf, server, totalCards, cols, rows, t, resetAll]);
+  }, [sourcePdfs, designPdfs, server, totalCards, cols, rows, t, resetAll]);
 
   const handleDownload = () => { if (result) downloadBlob(result.bytes, result.filename); };
   const handlePreview = () => {
@@ -166,6 +202,8 @@ export default function QrGenerator({ t, lang }) {
 
   const isDone = !!result;
   const currentPhaseLabel = status.phase ? phaseLabel(t, status.phase) : t.ready;
+  const sourcePdf = sourcePdfs[0] || null;
+  const designPdf = designPdfs[0] || null;
 
   return (
     <div className="space-y-8">
@@ -197,8 +235,8 @@ export default function QrGenerator({ t, lang }) {
               {sourcePdf && designPdf && <span className="text-xs text-emerald-300/80">● Ready</span>}
             </div>
             <div className="space-y-4">
-              <Dropzone title={t.stepData} hint={t.stepDataHint} file={sourcePdf} onFile={setSourcePdf} t={t} testId="source-pdf-dropzone" accent="from-violet-500 to-fuchsia-500" disabled={processing} />
-              <Dropzone title={t.stepDesign} hint={t.stepDesignHint} file={designPdf} onFile={setDesignPdf} t={t} testId="design-pdf-dropzone" accent="from-cyan-500 to-emerald-500" disabled={processing} />
+              <Dropzone title={t.stepData} hint={t.stepDataHint} files={sourcePdfs} onFiles={addSourcePdfs} onRemove={removeSourcePdf} t={t} testId="source-pdf-dropzone" accent="from-violet-500 to-fuchsia-500" disabled={processing} multiple={true} />
+              <Dropzone title={t.stepDesign} hint={t.stepDesignHint} files={designPdfs} onFiles={setDesignPdfs} t={t} testId="design-pdf-dropzone" accent="from-cyan-500 to-emerald-500" disabled={processing} multiple={false} />
             </div>
           </div>
 

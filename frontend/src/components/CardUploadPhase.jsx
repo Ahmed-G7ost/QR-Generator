@@ -1,25 +1,32 @@
-import { useRef, useState, useCallback } from "react";
-import { parseDataFile, readTemplateImage } from "@/lib/dataParser";
+import { useRef, useState, useCallback, useEffect } from "react";
+import { parseDataFiles, readTemplateImage } from "@/lib/dataParser";
 
-function FileDropzone({ title, hint, formats, file, onDrop, testId, disabled, accent, acceptTypes }) {
+function FileDropzone({ title, hint, formats, files, onDrop, onRemove, testId, disabled, accent, acceptTypes, multiple }) {
   const inputRef = useRef(null);
   const [over, setOver] = useState(false);
 
-  const handleFile = useCallback((f) => {
-    if (!f || disabled) return;
-    onDrop(f);
-  }, [disabled, onDrop]);
+  const handleFiles = useCallback((fileList) => {
+    if (!fileList || fileList.length === 0 || disabled) return;
+    const arr = Array.from(fileList);
+    onDrop(multiple ? arr : [arr[0]]);
+  }, [disabled, onDrop, multiple]);
+
+  const fileArr = files || [];
 
   return (
     <div
       data-testid={testId}
       onDragOver={(e) => { if (!disabled) { e.preventDefault(); setOver(true); } }}
       onDragLeave={() => setOver(false)}
-      onDrop={(e) => { if (disabled) return; e.preventDefault(); setOver(false); handleFile(e.dataTransfer.files?.[0]); }}
-      onClick={() => !disabled && inputRef.current?.click()}
+      onDrop={(e) => { if (disabled) return; e.preventDefault(); setOver(false); handleFiles(e.dataTransfer.files); }}
+      onClick={(e) => {
+        // Don't open file picker if clicking a remove button
+        if (e.target.closest("[data-remove-btn]")) return;
+        if (!disabled) inputRef.current?.click();
+      }}
       className={`group relative rounded-2xl border border-white/10 bg-white/[0.02] p-5 transition-all ${
         disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-white/[0.04] hover:border-white/20"
-      } ${over ? "border-cyan-400/60 bg-cyan-400/5" : ""} ${file ? "border-emerald-400/30" : ""}`}
+      } ${over ? "border-cyan-400/60 bg-cyan-400/5" : ""} ${fileArr.length > 0 ? "border-emerald-400/30" : ""}`}
     >
       <div className="flex items-start gap-4">
         <div className={`h-12 w-12 shrink-0 rounded-xl flex items-center justify-center bg-gradient-to-br ${accent} shadow-lg shadow-black/40`}>
@@ -32,10 +39,29 @@ function FileDropzone({ title, hint, formats, file, onDrop, testId, disabled, ac
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-semibold text-base">{title}</h3>
           <p className="text-sm text-white/50 mt-1">{hint}</p>
-          {file ? (
-            <div data-testid={`${testId}-selected`} className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-400/10 border border-emerald-400/30 px-3 py-2">
-              <span className="text-emerald-300 text-sm font-medium truncate" title={file.name}>✓ {file.name}</span>
-              <span className="text-emerald-200/60 text-xs ms-auto">{(file.size / 1024).toFixed(1)} KB</span>
+          {fileArr.length > 0 ? (
+            <div className="mt-3 space-y-1.5">
+              {fileArr.map((f, i) => (
+                <div key={i} data-testid={`${testId}-selected-${i}`} className="flex items-center gap-2 rounded-lg bg-emerald-400/10 border border-emerald-400/30 px-3 py-2">
+                  <span className="text-emerald-300 text-sm font-medium truncate" title={f.name}>✓ {f.name}</span>
+                  <span className="text-emerald-200/60 text-xs ms-2">{(f.size / 1024).toFixed(1)} KB</span>
+                  {onRemove && (
+                    <button
+                      data-remove-btn="true"
+                      data-testid={`${testId}-remove-${i}`}
+                      onClick={(e) => { e.stopPropagation(); onRemove(i); }}
+                      className="ms-auto flex-shrink-0 h-5 w-5 rounded-full bg-rose-400/20 border border-rose-400/40 text-rose-300 hover:bg-rose-400/40 transition flex items-center justify-center"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+              {multiple && (
+                <div className="mt-1 text-xs text-white/40 text-center">+ أضف ملفات إضافية</div>
+              )}
             </div>
           ) : (
             <div className="mt-3 text-xs text-white/40">
@@ -44,34 +70,57 @@ function FileDropzone({ title, hint, formats, file, onDrop, testId, disabled, ac
           )}
         </div>
       </div>
-      <input ref={inputRef} type="file" accept={acceptTypes} className="hidden" disabled={disabled}
-        onChange={(e) => handleFile(e.target.files?.[0])} data-testid={`${testId}-input`} />
+      <input ref={inputRef} type="file" accept={acceptTypes} multiple={!!multiple} className="hidden" disabled={disabled}
+        onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} data-testid={`${testId}-input`} />
     </div>
   );
 }
 
 export default function CardUploadPhase({ t, lang, state, dispatch, onNext }) {
-  const { records, dataFile, templateFile, templateDimensions, uploading } = state;
+  const { records, templateFile, templateDimensions, uploading } = state;
+  const [dataFiles, setDataFiles] = useState([]);
 
-  const handleDataUpload = useCallback(async (file) => {
-    dispatch({ type: "SET_DATA_FILE", payload: file });
-    dispatch({ type: "SET_UPLOADING", payload: true });
-    dispatch({ type: "SET_ERROR", payload: null });
-    try {
-      const parsed = await parseDataFile(file);
-      if (!parsed || parsed.length === 0) {
-        dispatch({ type: "SET_ERROR", payload: t.errorGeneric || "لم يتم العثور على بيانات في الملف." });
-      } else {
-        // Store full records in state (no backend session needed).
-        dispatch({ type: "SET_SESSION", payload: "client-" + Date.now() });
-        dispatch({ type: "SET_RECORDS_FULL", payload: { records: parsed, sample: parsed.slice(0, 5) } });
-      }
-    } catch (err) {
-      dispatch({ type: "SET_ERROR", payload: err.message || t.errorGeneric });
-    } finally {
-      dispatch({ type: "SET_UPLOADING", payload: false });
+  // Re-process all files whenever the list changes
+  useEffect(() => {
+    if (dataFiles.length === 0) {
+      dispatch({ type: "SET_RECORDS_FULL", payload: { records: [] } });
+      dispatch({ type: "SET_DATA_FILE", payload: null });
+      return;
     }
-  }, [dispatch, t]);
+    let cancelled = false;
+    const run = async () => {
+      dispatch({ type: "SET_DATA_FILE", payload: dataFiles[0] });
+      dispatch({ type: "SET_UPLOADING", payload: true });
+      dispatch({ type: "SET_ERROR", payload: null });
+      try {
+        const parsed = await parseDataFiles(dataFiles);
+        if (cancelled) return;
+        if (!parsed || parsed.length === 0) {
+          dispatch({ type: "SET_ERROR", payload: t.errorGeneric || "لم يتم العثور على بيانات في الملفات." });
+        } else {
+          dispatch({ type: "SET_SESSION", payload: "client-" + Date.now() });
+          dispatch({ type: "SET_RECORDS_FULL", payload: { records: parsed } });
+        }
+      } catch (err) {
+        if (!cancelled) dispatch({ type: "SET_ERROR", payload: err.message || t.errorGeneric });
+      } finally {
+        if (!cancelled) dispatch({ type: "SET_UPLOADING", payload: false });
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [dataFiles]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Append new files to existing list
+  const handleDataUpload = useCallback((newFiles) => {
+    if (!newFiles || newFiles.length === 0) return;
+    setDataFiles(prev => [...prev, ...newFiles]);
+  }, []);
+
+  // Remove a single file from the list
+  const removeDataFile = useCallback((index) => {
+    setDataFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const handleTemplateUpload = useCallback(async (file) => {
     dispatch({ type: "SET_TEMPLATE_FILE", payload: file });
@@ -97,12 +146,14 @@ export default function CardUploadPhase({ t, lang, state, dispatch, onNext }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FileDropzone title={t.dataFileTitle} hint={t.dataFileHint} formats={t.supportedFormats}
-          file={dataFile} onDrop={handleDataUpload} testId="card-data-dropzone" disabled={uploading}
-          accent="from-violet-500 to-fuchsia-500"
+          files={dataFiles} onDrop={handleDataUpload} onRemove={removeDataFile}
+          testId="card-data-dropzone" disabled={uploading}
+          accent="from-violet-500 to-fuchsia-500" multiple={true}
           acceptTypes=".xlsx,.xls,.csv,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
         <FileDropzone title={t.templateTitle} hint={t.templateHint} formats={t.supportedImages}
-          file={templateFile} onDrop={handleTemplateUpload} testId="card-template-dropzone" disabled={uploading || records.length === 0}
-          accent="from-cyan-500 to-emerald-500"
+          files={templateFile ? [templateFile] : []} onDrop={(arr) => handleTemplateUpload(arr[0])}
+          testId="card-template-dropzone" disabled={uploading || records.length === 0}
+          accent="from-cyan-500 to-emerald-500" multiple={false}
           acceptTypes=".jpg,.jpeg,.png,image/jpeg,image/png" />
       </div>
 
