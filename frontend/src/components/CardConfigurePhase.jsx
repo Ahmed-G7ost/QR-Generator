@@ -86,8 +86,9 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
   const [templates, setTemplates] = useState([]);
   const [templateName, setTemplateName] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
-  const [customCols, setCustomCols] = useState(3);
-  const [customRows, setCustomRows] = useState(8);
+  const [isCustomGrid, setIsCustomGrid] = useState(false);
+  const [customCols, setCustomCols] = useState(5);
+  const [customRows, setCustomRows] = useState(11);
 
   useEffect(() => { setTemplates(loadSavedTemplates()); }, []);
 
@@ -172,9 +173,9 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
             <div className="grid grid-cols-4 gap-2" data-testid="grid-layout-options">
               {GRID_OPTIONS.map((opt) => (
                 <button key={opt.value} data-testid={`grid-option-${opt.value}`}
-                  onClick={() => updateConfig("grid", opt.value)}
+                  onClick={() => { setIsCustomGrid(false); updateConfig("grid", opt.value); }}
                   className={`rounded-xl border p-3 text-center transition-all ${
-                    config.grid === opt.value
+                    !isCustomGrid && config.grid === opt.value
                       ? "border-cyan-400/60 bg-cyan-400/10 text-white"
                       : "border-white/10 bg-white/[0.02] text-white/60 hover:border-white/20"}`}>
                   <span className="font-mono font-bold text-sm block">{opt.label}</span>
@@ -184,18 +185,18 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
               {/* Custom option */}
               <button
                 data-testid="grid-option-custom"
-                onClick={() => updateConfig("grid", `${customCols}x${customRows}`)}
+                onClick={() => { setIsCustomGrid(true); updateConfig("grid", `${customCols}x${customRows}`); }}
                 className={`rounded-xl border p-3 text-center transition-all ${
-                  !GRID_OPTIONS.find((o) => o.value === config.grid)
+                  isCustomGrid
                     ? "border-cyan-400/60 bg-cyan-400/10 text-white"
                     : "border-white/10 bg-white/[0.02] text-white/60 hover:border-white/20"}`}>
                 <span className="font-mono font-bold text-sm block">{t.customGrid}</span>
-                <span className="text-[10px] text-white/40">{customCols * customRows} {t.customGridCardsPerPage}</span>
+                <span className="text-[10px] text-white/40">{isCustomGrid ? `${customCols * customRows} ${t.customGridCardsPerPage}` : "..."}</span>
               </button>
             </div>
             {/* Custom grid inputs — shown only when custom is selected */}
-            {!GRID_OPTIONS.find((o) => o.value === config.grid) && (
-              <div className="mt-3 grid grid-cols-2 gap-3">
+            {isCustomGrid && (
+              <div className="mt-3 grid grid-cols-3 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-semibold">{t.customGridCols}</label>
                   <input
@@ -220,6 +221,22 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
                       updateConfig("grid", `${customCols}x${v}`);
                     }}
                     className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-cyan-400/50 text-center"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-semibold">{t.customGridCardsPerPage}</label>
+                  <input
+                    type="number" min={1} max={400} value={customCols * customRows}
+                    data-testid="custom-grid-total"
+                    onChange={(e) => {
+                      const total = Math.max(1, Math.min(400, parseInt(e.target.value) || 1));
+                      const newCols = Math.max(1, Math.round(Math.sqrt(total)));
+                      const newRows = Math.max(1, Math.ceil(total / newCols));
+                      setCustomCols(newCols);
+                      setCustomRows(newRows);
+                      updateConfig("grid", `${newCols}x${newRows}`);
+                    }}
+                    className="bg-white/[0.04] border border-cyan-400/20 rounded-xl px-3 py-2 text-cyan-300 text-sm font-mono focus:outline-none focus:border-cyan-400/50 text-center font-bold"
                   />
                 </div>
               </div>

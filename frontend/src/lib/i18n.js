@@ -182,7 +182,7 @@ export const translations = {
     workersLabel: "معالج",
     // Mode switcher
     modeQr: "مولّد QR",
-    modeCards: "مستخرج البطاقات",
+    modeCards: "مولّد البطاقات",
     // Card Extractor
     cardHeadline: "مستخرج البطاقات",
     cardTagline: "استخرج بطاقات الانترنت من ملفاتك واطبعها بسهولة. ارفع، اضبط، وصدّر كـ PDF.",
