@@ -67,7 +67,7 @@ const Logo = () => (
     </div>
     <div className="flex flex-col leading-tight">
       <span className="text-[10px] tracking-[0.3em] text-white/40 uppercase">A7D</span>
-      <span className="text-sm font-bold text-white">QR Generator</span>
+      <span className="text-sm font-bold text-white">Cards &amp; QR Generator</span>
     </div>
   </div>
 );
