@@ -13,7 +13,7 @@
 import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
-import { generateStyledQrPng } from "@/components/QrStyleCustomizer";
+import { generateStyledQrPng } from "../components/QrStyleCustomizer";
 
 // A4 in PDF points
 const A4_W = 595.2755905511812;
