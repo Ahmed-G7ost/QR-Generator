@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import CardPreview from "./CardPreview";
+import QrStyleCustomizer from "./QrStyleCustomizer";
 
 const TEMPLATES_KEY = "qr_card_saved_templates_v1";
 
@@ -94,8 +95,8 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
 
   const saveTemplate = () => {
     if (!templateName.trim()) return;
-    // Exclude non-serializable custom_font (File object) before saving.
-    const { custom_font: _omit, ...serializable } = config;
+    // Exclude non-serializable custom_font & qr_logo & qr_fg_image (File objects) before saving.
+    const { custom_font: _omit, qr_logo: _omitLogo, qr_fg_image: _omitFgImg, ...serializable } = config;
     const id = String(Date.now());
     const next = [...templates, { id, name: templateName.trim(), config: serializable }];
     setTemplates(next);
@@ -307,6 +308,11 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
               </div>
             )}
           </div>
+
+          {/* QR Style Customizer - shown when QR is enabled */}
+          {config.show_qr && (
+            <QrStyleCustomizer config={config} updateConfig={updateConfig} t={t} />
+          )}
 
           {/* Date + Counter */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
