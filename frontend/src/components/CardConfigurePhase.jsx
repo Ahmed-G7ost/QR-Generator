@@ -386,3 +386,4 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
     </div>
   );
 }
+
