@@ -55,19 +55,19 @@ const Icons = {
 
 /* ─── Logo ───────────────────────────────────────────────────────────────── */
 const Logo = () => (
-  <div className="flex items-center gap-2.5" data-testid="brand-logo">
-    <div className="relative h-9 w-9 shrink-0">
-      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 blur-sm opacity-70" />
-      <div className="relative h-9 w-9 rounded-xl bg-[#0d0d18] border border-white/10 flex items-center justify-center">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+  <div className="flex items-center gap-3" data-testid="brand-logo">
+    <div className="relative h-10 w-10">
+      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 blur-md opacity-70" />
+      <div className="relative h-10 w-10 rounded-xl bg-[#0d0d18] border border-white/10 flex items-center justify-center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
           <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 4h3v3h-3v-3zm4-4h3v3h-3v-3zm0 7h3v-3h-3v3zm-4-7h3v3h-3v-3z" fill="url(#g)" />
           <defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stopColor="#a78bfa" /><stop offset="1" stopColor="#22d3ee" /></linearGradient></defs>
         </svg>
       </div>
     </div>
     <div className="flex flex-col leading-tight">
-      <span className="text-[10px] tracking-[0.3em] text-white/40 uppercase">A7D</span>
-      <span className="text-sm font-bold text-white">Cards &amp; QR Generator</span>
+      <span className="text-[11px] tracking-[0.3em] text-white/50 uppercase">A7D</span>
+      <span className="text-base font-bold text-white">Cards &amp; QR Generator</span>
     </div>
   </div>
 );
@@ -340,13 +340,13 @@ export default function App() {
             {mode === "customize" && <QrCustomizer t={t} lang={lang} />}
           </main>
 
-          {/* Footer */}
-          <footer className="px-6 sm:px-10 pb-8">
-            <div className="pt-6 border-t border-white/[0.05] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/30">
-              <span>&copy; {new Date().getFullYear()} A7D TEAM &middot; {t.allRights}</span>
-              <span>{t.poweredBy} A7D TEAM</span>
-            </div>
-          </footer>
+
+      <footer className="relative z-10 px-6 sm:px-10 pb-10">
+        <div className="max-w-6xl mx-auto pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/40">
+          <span>&copy; {new Date().getFullYear()} A7D TEAM &middot; {t.allRights}</span>
+          <span>{t.poweredBy} A7D TEAM</span>
+        </div>
+      </footer>
         </div>
       </div>
     </QrStyleProvider>
