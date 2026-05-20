@@ -13,7 +13,6 @@
 import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
-import { generateStyledQrPng } from "@/components/QrStyleCustomizer";
 
 // A4 in PDF points
 const A4_W = 595.2755905511812;
@@ -51,20 +50,8 @@ async function embedTemplate(pdfDoc, templateFile) {
   return pdfDoc.embedJpg(bytes);
 }
 
-async function generateQrPng(text, config, logoImgEl, fgImgEl) {
-  // Use styled QR if any customization is present
-  const hasCustom = config && (
-    config.qr_fg_color !== "#000000" || config.qr_bg_color !== "#ffffff" ||
-    config.qr_dot_style !== "square" || config.qr_eye_color ||
-    config.qr_use_gradient || config.qr_frame || config.qr_bg_shape !== "none" ||
-    logoImgEl || fgImgEl
-  );
-
-  if (hasCustom) {
-    return generateStyledQrPng(text, 256, config || {}, logoImgEl, fgImgEl);
-  }
-
-  // Fallback: original tiny PNG for zero-customization (smallest file)
+async function generateQrPng(text) {
+  // Tiny 1-bit-style PNG. `qrcode` returns a data URL by default; use buffer.
   const dataUrl = await QRCode.toDataURL(text, {
     errorCorrectionLevel: "M",
     margin: 1,
@@ -199,38 +186,11 @@ export async function generateCardsPdf({
     total: totalRecords,
   });
 
-  // Pre-build QR cache by content key + load logo & fg image for styled QR.
-  let logoImgEl = null;
-  let fgImgEl = null;
-  if (config.show_qr && config.qr_logo) {
-    try {
-      const logoUrl = URL.createObjectURL(config.qr_logo);
-      logoImgEl = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = logoUrl;
-      });
-      URL.revokeObjectURL(logoUrl);
-    } catch { /* logo load failed, proceed without */ }
-  }
-  if (config.show_qr && config.qr_fg_image) {
-    try {
-      const fgUrl = URL.createObjectURL(config.qr_fg_image);
-      fgImgEl = await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = fgUrl;
-      });
-      URL.revokeObjectURL(fgUrl);
-    } catch { /* fg image load failed, proceed without */ }
-  }
-
+  // Pre-build QR cache by content key.
   const qrCache = new Map();
   async function getQrImage(key) {
     if (qrCache.has(key)) return qrCache.get(key);
-    const png = await generateQrPng(key, config, logoImgEl, fgImgEl);
+    const png = await generateQrPng(key);
     const img = await pdfDoc.embedPng(png);
     qrCache.set(key, img);
     return img;
