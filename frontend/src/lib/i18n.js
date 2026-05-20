@@ -318,4 +318,3 @@ export const translations = {
     qrFgImageHint: "ارفع صورة ليتم تلوين نقاط QR بألوانها",
   },
 };
-
