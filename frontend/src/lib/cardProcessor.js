@@ -375,4 +375,3 @@ export function previewPdfBlob(pdfBytes) {
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
-
