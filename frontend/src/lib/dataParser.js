@@ -106,9 +106,14 @@ function legacyRegexParse(allTokens) {
 /* --------------------------- Excel / CSV parsing ------------------------- */
 async function parseExcel(file) {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
+  // Use cellText:true so XLSX preserves the formatted text of each cell
+  // (avoids floating-point corruption of long numeric IDs like 12-digit usernames).
+  // cellDates:false prevents date serial numbers from being parsed incorrectly.
+  const wb = XLSX.read(buf, { type: "array", cellText: true, cellDates: false });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  // raw:false  → use the formatted text (.w) instead of the raw JS number (.v)
+  // defval:""  → fill empty cells with an empty string
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
   return rowsToRecords(rows);
 }
 
@@ -141,8 +146,10 @@ function rowsToRecords(rows) {
 
   const records = [];
   for (const r of dataRows) {
-    const u = String(r[userIdx] ?? "").trim();
-    const p = String(r[passIdx] ?? "").trim();
+    // Strip commas/spaces that Excel may add when formatting large numbers
+    // e.g. "1,234,567,890" → "1234567890"
+    const u = String(r[userIdx] ?? "").trim().replace(/[\s,]/g, "");
+    const p = String(r[passIdx] ?? "").trim().replace(/[\s,]/g, "");
     if (u && u !== "nan") {
       records.push({ username: u, password: p === "nan" ? "" : p });
     }
