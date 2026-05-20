@@ -1,177 +1,143 @@
-/**
- * Client-side parser for source data files (Excel / CSV / PDF).
- * Mirrors the backend logic in /api/upload/data 1:1 but runs entirely in browser.
- *
- * Output shape: [{ username: string, password: string }, ...]
- */
-import * as pdfjsLib from "pdfjs-dist/build/pdf";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
-/* ------------------------------ PDF parsing ------------------------------ */
-/**
- * Smart PDF parser — detects username & password digit-lengths automatically
- * by analysing the structure of consecutive numeric rows. The longer column
- * is treated as usernames, the shorter as passwords. Date rows (years 19xx /
- * 20xx) are ignored.
- */
-async function parsePdf(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-  // Collect every "token" with its (x, y) so we can reconstruct columns.
-  const allTokens = [];
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    for (const it of content.items) {
-      const str = (it.str || "").trim();
-      if (!str) continue;
-      // pdf.js transform: [a, b, c, d, e, f] where (e, f) is position.
-      const x = it.transform[4];
-      const y = it.transform[5];
-      allTokens.push({ str, x, y, page: p });
-    }
-  }
-
-  // Extract numeric tokens only (used for username/password detection).
-  const numericTokens = allTokens.filter((t) => /^\d+$/.test(t.str));
-
-  if (numericTokens.length === 0) {
-    throw new Error("لم يتم العثور على أرقام في ملف PDF.");
-  }
-
-  // Build a histogram of digit-lengths → most frequent two lengths are
-  // username & password. Skip lengths 4 (typical year) when other lengths win.
-  const lengthCounts = {};
-  for (const t of numericTokens) {
-    const L = t.str.length;
-    lengthCounts[L] = (lengthCounts[L] || 0) + 1;
-  }
-
-  // Filter out year-like lengths (4 digits starting with 19/20) if better
-  // options exist.
-  const filteredLengths = Object.entries(lengthCounts).filter(([L]) => {
-    const len = parseInt(L);
-    if (len < 3) return false;
-    if (len === 4) {
-      // Treat as year if every 4-digit number starts with 19 or 20.
-      const fours = numericTokens.filter((t) => t.str.length === 4);
-      const yearLike = fours.filter((t) => /^(19|20)\d{2}$/.test(t.str)).length;
-      return yearLike / fours.length < 0.7;
-    }
-    return true;
+function readFileAsArrayBuffer(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = (e) => res(e.target.result);
+    reader.onerror = rej;
+    reader.readAsArrayBuffer(file);
   });
-
-  if (filteredLengths.length < 2) {
-    // Fall back to simple regex for 12-digit / 6-digit case (legacy support).
-    return legacyRegexParse(allTokens);
-  }
-
-  // Pick the two most frequent lengths.
-  filteredLengths.sort((a, b) => b[1] - a[1]);
-  const [lenA, lenB] = [parseInt(filteredLengths[0][0]), parseInt(filteredLengths[1][0])];
-  const userLen = Math.max(lenA, lenB);
-  const passLen = Math.min(lenA, lenB);
-
-  const usernames = numericTokens.filter((t) => t.str.length === userLen);
-  const passwords = numericTokens.filter((t) => t.str.length === passLen);
-
-  const n = Math.min(usernames.length, passwords.length);
-  if (n === 0) {
-    throw new Error("لم يتم العثور على أزواج صالحة (اسم مستخدم / كلمة مرور).");
-  }
-
-  const records = [];
-  for (let i = 0; i < n; i++) {
-    records.push({ username: usernames[i].str, password: passwords[i].str });
-  }
-  return records;
 }
 
-function legacyRegexParse(allTokens) {
-  const txt = allTokens.map((t) => t.str).join(" ");
-  const usernames = txt.match(/\b\d{12}\b/g) || [];
-  const passwords = txt.match(/\b\d{6}\b/g) || [];
-  const n = Math.min(usernames.length, passwords.length);
-  const records = [];
-  for (let i = 0; i < n; i++) {
-    records.push({ username: usernames[i], password: passwords[i] });
-  }
-  return records;
+function readFileAsText(file) {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = (e) => res(e.target.result);
+    reader.onerror = rej;
+    reader.readAsText(file, "utf-8");
+  });
 }
 
-/* --------------------------- Excel / CSV parsing ------------------------- */
+// ── Normalise a row object to {username, password} ─────────────────────────
+
+function normaliseRow(row) {
+  const keys = Object.keys(row);
+  const lower = keys.reduce((m, k) => { m[k.toLowerCase().trim()] = row[k]; return m; }, {});
+
+  const usernameKeys = ["username", "user", "يوزر", "اليوزر", "اسم المستخدم", "account", "login"];
+  const passwordKeys = ["password", "pass", "باسورد", "الباسورد", "كلمة المرور", "pwd", "secret"];
+
+  const uKey = usernameKeys.find((k) => lower[k] !== undefined);
+  const pKey = passwordKeys.find((k) => lower[k] !== undefined);
+
+  // Fallback: first two non-empty columns
+  const vals = Object.values(lower).filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
+
+  const username = String(uKey ? lower[uKey] : vals[0] ?? "").trim();
+  const password = String(pKey ? lower[pKey] : vals[1] ?? "").trim();
+  return username || password ? { username, password } : null;
+}
+
+// ── Excel parser ──────────────────────────────────────────────────────────
+
 async function parseExcel(file) {
-  const buf = await file.arrayBuffer();
+  const buf = await readFileAsArrayBuffer(file);
   const wb = XLSX.read(buf, { type: "array" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-  return rowsToRecords(rows);
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+  return rows.map(normaliseRow).filter(Boolean);
 }
+
+// ── CSV parser ────────────────────────────────────────────────────────────
 
 async function parseCsv(file) {
-  const text = await file.text();
-  const parsed = Papa.parse(text, { skipEmptyLines: true });
-  return rowsToRecords(parsed.data);
+  const text = await readFileAsText(file);
+  return new Promise((resolve, reject) => {
+    Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        resolve(result.data.map(normaliseRow).filter(Boolean));
+      },
+      error: reject,
+    });
+  });
 }
 
-function rowsToRecords(rows) {
-  if (!rows || rows.length === 0) return [];
+// ── PDF parser ────────────────────────────────────────────────────────────
 
-  // Detect header row by checking if first row contains user/pass keywords.
-  const first = rows[0].map((c) => String(c).toLowerCase().trim());
-  const userKeywords = ["user", "اسم", "name", "username"];
-  const passKeywords = ["pass", "كلمة", "pwd", "password"];
+async function parsePdf(file) {
+  const buf = await readFileAsArrayBuffer(file);
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const lines = [];
 
-  let userIdx = first.findIndex((c) => userKeywords.some((k) => c.includes(k)));
-  let passIdx = first.findIndex((c) => passKeywords.some((k) => c.includes(k)));
-
-  let dataRows = rows;
-  if (userIdx !== -1 || passIdx !== -1) {
-    dataRows = rows.slice(1);
-    if (userIdx === -1) userIdx = 0;
-    if (passIdx === -1) passIdx = 1;
-  } else {
-    userIdx = 0;
-    passIdx = 1;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map((item) => item.str).join(" ");
+    lines.push(pageText);
   }
 
+  // Parse username/password patterns
   const records = [];
-  for (const r of dataRows) {
-    const u = String(r[userIdx] ?? "").trim();
-    const p = String(r[passIdx] ?? "").trim();
-    if (u && u !== "nan") {
-      records.push({ username: u, password: p === "nan" ? "" : p });
+  const combined = lines.join("\n");
+
+  // Try to find pairs with common separators
+  const patterns = [
+    /(?:user(?:name)?|يوزر)[:\s]+(\S+)[^\n]*(?:pass(?:word)?|باسورد)[:\s]+(\S+)/gi,
+    /(\S+)\s*[|,\t]\s*(\S+)/g,
+  ];
+
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(combined)) !== null) {
+      if (match[1] && match[2]) {
+        records.push({ username: match[1].trim(), password: match[2].trim() });
+      }
+    }
+    if (records.length > 0) break;
+  }
+
+  // If still nothing, split by lines and try each line as "username password"
+  if (records.length === 0) {
+    const lineArr = combined.split(/[\n\r]+/);
+    for (const line of lineArr) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        records.push({ username: parts[0], password: parts[1] });
+      }
     }
   }
-  return records;
+
+  return records.filter((r) => r.username && r.password);
 }
 
-/* --------------------------------- API ----------------------------------- */
+// ── Main export ───────────────────────────────────────────────────────────
+
 export async function parseDataFile(file) {
-  if (!file) throw new Error("لم يتم اختيار ملف.");
-  const name = (file.name || "").toLowerCase();
-  if (name.endsWith(".pdf")) return parsePdf(file);
-  if (name.endsWith(".xlsx") || name.endsWith(".xls")) return parseExcel(file);
-  if (name.endsWith(".csv")) return parseCsv(file);
-  throw new Error("صيغة غير مدعومة. استخدم Excel (.xlsx) أو CSV أو PDF.");
+  const ext = file.name.split(".").pop().toLowerCase();
+  if (["xlsx", "xls"].includes(ext)) return parseExcel(file);
+  if (ext === "csv") return parseCsv(file);
+  if (ext === "pdf") return parsePdf(file);
+  throw new Error("Unsupported file type: " + ext);
 }
 
-export async function readTemplateImage(file) {
-  if (!file) throw new Error("لم يتم اختيار ملف صورة.");
-  const ext = (file.name.split(".").pop() || "").toLowerCase();
-  if (!["jpg", "jpeg", "png"].includes(ext)) {
-    throw new Error("صيغة صورة غير مدعومة. استخدم JPG أو PNG.");
-  }
-  const url = URL.createObjectURL(file);
-  const dims = await new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = reject;
-    img.src = url;
+export function readTemplateImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => resolve({ url: e.target.result, width: img.width, height: img.height });
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
-  return { url, width: dims.width, height: dims.height, ext };
 }

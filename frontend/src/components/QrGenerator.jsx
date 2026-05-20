@@ -6,8 +6,9 @@ import {
   CancelToken,
   isCancelledError,
 } from "@/lib/pdfProcessor";
+import { useQrStyle } from "@/context/QrStyleContext";
 
-/* ----------------------------- File drop zone ----------------------------- */
+/* ── Dropzone ─────────────────────────────────────────────────────────────── */
 const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) => {
   const inputRef = useRef(null);
   const [over, setOver] = useState(false);
@@ -19,8 +20,7 @@ const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) =>
   };
 
   return (
-    <div
-      data-testid={testId}
+    <div data-testid={testId}
       onDragOver={(e) => { if (disabled) return; e.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => { if (disabled) return; e.preventDefault(); setOver(false); handle(e.dataTransfer.files?.[0]); }}
@@ -45,9 +45,7 @@ const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) =>
           <p className="text-sm text-white/50 mt-1">{hint}</p>
           {file ? (
             <div data-testid={`${testId}-selected`} className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-400/10 border border-emerald-400/30 px-3 py-2">
-              <span className="text-emerald-300 text-sm font-medium truncate" title={file.name}>
-                ✓ {file.name}
-              </span>
+              <span className="text-emerald-300 text-sm font-medium truncate" title={file.name}>✓ {file.name}</span>
               <span className="text-emerald-200/60 text-xs ms-auto">{(file.size / 1024).toFixed(1)} KB</span>
             </div>
           ) : (
@@ -59,34 +57,37 @@ const Dropzone = ({ title, hint, file, onFile, t, testId, accent, disabled }) =>
           )}
         </div>
       </div>
-      <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" disabled={disabled} onChange={(e) => handle(e.target.files?.[0])} data-testid={`${testId}-input`} />
+      <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden"
+        disabled={disabled} onChange={(e) => handle(e.target.files?.[0])}
+        data-testid={`${testId}-input`} />
     </div>
   );
 };
 
-/* ------------------------------- Number Input ------------------------------ */
+/* ── Number Input ─────────────────────────────────────────────────────────── */
 const NumberField = ({ label, value, onChange, testId, min = 1, max = 999, disabled }) => (
   <div className="flex flex-col gap-2">
     <label className="text-[12px] uppercase tracking-[0.18em] text-white/50 font-medium">{label}</label>
-    <input type="number" min={min} max={max} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} data-testid={testId}
+    <input type="number" min={min} max={max} value={value} disabled={disabled}
+      onChange={(e) => onChange(e.target.value)} data-testid={testId}
       className="bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-mono tracking-wider focus:outline-none focus:border-cyan-400/50 focus:bg-white/[0.06] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
     />
   </div>
 );
 
-/* ------------------------------ Phase Stepper ----------------------------- */
+/* ── Phase Stepper ────────────────────────────────────────────────────────── */
 const PHASE_ORDER = [PHASES.EXTRACTING, PHASES.GENERATING_QR, PHASES.LAYOUT, PHASES.MERGING, PHASES.SAVING];
 
 const phaseLabel = (t, phase) => {
-  switch (phase) {
-    case PHASES.EXTRACTING: return t.phaseExtracting;
-    case PHASES.GENERATING_QR: return t.phaseGeneratingQr;
-    case PHASES.LAYOUT: return t.phaseLayout;
-    case PHASES.MERGING: return t.phaseMerging;
-    case PHASES.SAVING: return t.phaseSaving;
-    case PHASES.DONE: return t.phaseDone;
-    default: return t.ready;
-  }
+  const map = {
+    [PHASES.EXTRACTING]: t.phaseExtracting,
+    [PHASES.GENERATING_QR]: t.phaseGeneratingQr,
+    [PHASES.LAYOUT]: t.phaseLayout,
+    [PHASES.MERGING]: t.phaseMerging,
+    [PHASES.SAVING]: t.phaseSaving,
+    [PHASES.DONE]: t.phaseDone,
+  };
+  return map[phase] || t.ready;
 };
 
 const PhaseStepper = ({ t, currentPhase, completed }) => {
@@ -97,7 +98,8 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
         const isDone = completed || idx < currentIdx;
         const isActive = !completed && idx === currentIdx;
         return (
-          <div key={p} data-testid={`qr-phase-${p}`} data-state={isDone ? "done" : isActive ? "active" : "pending"} className="flex flex-col items-center gap-1.5">
+          <div key={p} data-testid={`qr-phase-${p}`} data-state={isDone ? "done" : isActive ? "active" : "pending"}
+            className="flex flex-col items-center gap-1.5">
             <div className={`h-1 w-full rounded-full transition-all ${isDone ? "bg-emerald-400/80" : isActive ? "bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 animate-pulse" : "bg-white/10"}`} />
             <span className={`text-[10px] text-center leading-tight ${isDone ? "text-emerald-300/80" : isActive ? "text-white" : "text-white/30"}`}>{phaseLabel(t, p)}</span>
           </div>
@@ -107,7 +109,7 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
   );
 };
 
-/* ------------------------------- QR Generator ------------------------------ */
+/* ── QR Generator ─────────────────────────────────────────────────────────── */
 export default function QrGenerator({ t, lang }) {
   const [sourcePdf, setSourcePdf] = useState(null);
   const [designPdf, setDesignPdf] = useState(null);
@@ -121,6 +123,7 @@ export default function QrGenerator({ t, lang }) {
   const [error, setError] = useState("");
   const [cancelled, setCancelled] = useState(false);
   const cancelTokenRef = useRef(null);
+  const { qrStyle } = useQrStyle();
 
   const resetAll = useCallback(() => {
     setSourcePdf(null); setDesignPdf(null); setServer(""); setTotalCards(8); setCols(2); setRows(4);
@@ -136,7 +139,9 @@ export default function QrGenerator({ t, lang }) {
 
   const handleStart = useCallback(async () => {
     setError(""); setResult(null); setCancelled(false);
-    if (!sourcePdf || !designPdf || !server || !totalCards || !cols || !rows) { setError(t.errorMissing); return; }
+    if (!sourcePdf || !designPdf || !server || !totalCards || !cols || !rows) {
+      setError(t.errorMissing); return;
+    }
     setProcessing(true);
     setStatus({ phase: PHASES.EXTRACTING, message: t.processing, percent: 0, current: 0, total: 0, workers: 0 });
     const cancelToken = new CancelToken();
@@ -145,6 +150,7 @@ export default function QrGenerator({ t, lang }) {
       const { pdfBytes, filename, itemsCount } = await processPdfs({
         sourcePdfFile: sourcePdf, designPdfFile: designPdf, server: server.trim(),
         totalCards: parseInt(totalCards, 10), cols: parseInt(cols, 10), rows: parseInt(rows, 10),
+        qrStyle,
         cancelToken, onProgress: (p) => setStatus((s) => ({ ...s, ...p })),
       });
       setResult({ bytes: pdfBytes, filename, count: itemsCount });
@@ -153,7 +159,7 @@ export default function QrGenerator({ t, lang }) {
       if (isCancelledError(e)) { resetAll(); return; }
       console.error(e); setError(e.message || t.errorGeneric);
     } finally { setProcessing(false); cancelTokenRef.current = null; }
-  }, [sourcePdf, designPdf, server, totalCards, cols, rows, t, resetAll]);
+  }, [sourcePdf, designPdf, server, totalCards, cols, rows, qrStyle, t, resetAll]);
 
   const handleDownload = () => { if (result) downloadBlob(result.bytes, result.filename); };
   const handlePreview = () => {
@@ -184,7 +190,7 @@ export default function QrGenerator({ t, lang }) {
         ))}
       </div>
 
-      {/* Main work area */}
+      {/* Main area */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: Upload */}
         <div className="lg:col-span-3 space-y-6">
@@ -215,7 +221,7 @@ export default function QrGenerator({ t, lang }) {
           </div>
         </div>
 
-        {/* Right: Settings + run */}
+        {/* Right: Settings */}
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.05] to-white/[0.01] p-6 sm:p-8 sticky top-4">
             <div className="flex items-center gap-3 mb-5">
@@ -226,15 +232,10 @@ export default function QrGenerator({ t, lang }) {
             <div className="space-y-4">
               <div className="flex flex-col gap-2">
                 <label className="text-[12px] uppercase tracking-[0.18em] text-white/50 font-medium">{t.serverLabel}</label>
-                <input type="text" value={server} onChange={(e) => setServer(e.target.value)} placeholder={t.serverPlaceholder} data-testid="server-input" disabled={processing}
+                <input type="text" value={server} onChange={(e) => setServer(e.target.value)}
+                  placeholder={t.serverPlaceholder} data-testid="server-input" disabled={processing}
                   className="bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white text-base focus:outline-none focus:border-cyan-400/50 focus:bg-white/[0.06] transition-all placeholder:text-white/30 disabled:opacity-50"
                 />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[12px] uppercase tracking-[0.18em] text-white/50 font-medium">{t.directLogin}</label>
-                <div className="bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white/70 text-base min-h-[48px] flex items-center">
-                  {t.directLogin}
-                </div>
               </div>
               <NumberField label={t.totalCardsLabel} value={totalCards} onChange={setTotalCards} testId="total-cards-input" disabled={processing} />
               <div className="grid grid-cols-2 gap-3">
@@ -264,7 +265,8 @@ export default function QrGenerator({ t, lang }) {
 
             <div className="mt-6 space-y-3">
               {!processing ? (
-                <button onClick={handleStart} data-testid="qr-start-btn" className="group relative w-full h-14 rounded-2xl font-bold tracking-wide overflow-hidden transition-all">
+                <button onClick={handleStart} data-testid="qr-start-btn"
+                  className="group relative w-full h-14 rounded-2xl font-bold tracking-wide overflow-hidden transition-all">
                   <span className="absolute inset-0 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400" />
                   <span className="absolute inset-0 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 opacity-0 group-hover:opacity-100 blur-xl transition-opacity" />
                   <span className="relative flex items-center justify-center gap-3 text-white text-base">
@@ -286,11 +288,13 @@ export default function QrGenerator({ t, lang }) {
               )}
               {result && !processing && (
                 <div className="space-y-3">
-                  <button onClick={handlePreview} data-testid="qr-preview-btn" className="w-full h-12 rounded-2xl bg-violet-400/15 border border-violet-400/40 text-violet-200 font-semibold flex items-center justify-center gap-2 hover:bg-violet-400/25 transition">
+                  <button onClick={handlePreview} data-testid="qr-preview-btn"
+                    className="w-full h-12 rounded-2xl bg-violet-400/15 border border-violet-400/40 text-violet-200 font-semibold flex items-center justify-center gap-2 hover:bg-violet-400/25 transition">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" /></svg>
                     {t.previewBtn}
                   </button>
-                  <button onClick={handleDownload} data-testid="qr-download-btn" className="w-full h-12 rounded-2xl bg-emerald-400/15 border border-emerald-400/40 text-emerald-200 font-semibold flex items-center justify-center gap-2 hover:bg-emerald-400/25 transition">
+                  <button onClick={handleDownload} data-testid="qr-download-btn"
+                    className="w-full h-12 rounded-2xl bg-emerald-400/15 border border-emerald-400/40 text-emerald-200 font-semibold flex items-center justify-center gap-2 hover:bg-emerald-400/25 transition">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     {t.downloadBtn} · {result.count} {t.detected}
                   </button>

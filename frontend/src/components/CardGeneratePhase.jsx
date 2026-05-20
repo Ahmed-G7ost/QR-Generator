@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { generateCardsPdf, downloadPdfBlob, PHASES } from "@/lib/cardProcessor";
+import { useQrStyle } from "@/context/QrStyleContext";
 
 export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, onReset }) {
   const [generating, setGenerating] = useState(false);
@@ -7,6 +8,7 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState("");
   const pdfBytesRef = useRef(null);
+  const { qrStyle } = useQrStyle();
 
   const handleGenerate = async () => {
     setGenerating(true); setProgress(0); setResult(null); setPhase("");
@@ -20,6 +22,7 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
           templateFile: state.templateFile,
           config: state.config,
           customFontFile: state.config.custom_font || null,
+          qrStyle,
           onProgress: (p) => {
             setPhase(p.phase);
             setProgress(p.percent ?? 0);
@@ -38,8 +41,7 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
 
   const handleDownload = () => {
     if (!pdfBytesRef.current) return;
-    const { pdfBytes, filename } = pdfBytesRef.current;
-    downloadPdfBlob(pdfBytes, filename);
+    downloadPdfBlob(pdfBytesRef.current.pdfBytes, pdfBytesRef.current.filename);
   };
 
   const handlePreview = () => {
@@ -63,7 +65,6 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-center">
           <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold block mb-2">{t.totalRecords}</span>
@@ -77,7 +78,7 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
           <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold block mb-2">{t.totalPages}</span>
           <span className="text-3xl font-black font-mono text-white">{result ? result.total_pages : estimatedPages}</span>
         </div>
-        {result && result.file_size_kb && (
+        {result?.file_size_kb && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-center">
             <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold block mb-2">{t.fileSize}</span>
             <span className="text-2xl font-black font-mono text-emerald-300">
@@ -89,7 +90,6 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
         )}
       </div>
 
-      {/* Progress */}
       {generating && (
         <div className="space-y-2" data-testid="card-generation-progress">
           <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
@@ -105,7 +105,6 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
         </div>
       )}
 
-      {/* Result */}
       {result && !generating && (
         <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5 flex items-center justify-between" data-testid="card-generation-result">
           <div className="flex items-center gap-3">
@@ -118,12 +117,10 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
         </div>
       )}
 
-      {/* Error */}
       {state.error && (
         <div className="rounded-lg bg-rose-500/15 border border-rose-400/30 px-4 py-3 text-rose-300 text-sm">{state.error}</div>
       )}
 
-      {/* Buttons */}
       <div className="space-y-3">
         {!result ? (
           <button data-testid="card-generate-btn" onClick={handleGenerate} disabled={generating}
@@ -158,7 +155,6 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
         )}
       </div>
 
-      {/* Navigation */}
       <div className="flex justify-between pt-4 border-t border-white/10">
         <button data-testid="card-back-to-configure-btn" onClick={onBack} disabled={generating}
           className="px-6 py-3 rounded-xl font-semibold text-white/70 border border-white/15 hover:bg-white/[0.04] transition-all disabled:opacity-50">

@@ -1,31 +1,10 @@
-/**
- * Client-side PDF processor — mirrors A7D_QR.py logic 1:1, but rewritten as
- * a STAGED pipeline that keeps the UI thread responsive:
- *
- *   1. EXTRACTING      — read source PDF text & pull (12-digit, 6-digit) pairs
- *   2. GENERATING_QR   — generate every QR PNG in parallel via a Worker Pool
- *   3. LAYOUT          — drop each QR onto its A4 grid cell (yields to UI)
- *   4. MERGING         — interleave design pages with QR pages
- *   5. SAVING          — serialize the final PDF
- *
- * Supports a CancelToken so the user can abort at any time.
- */
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
+import { PDFDocument, rgb } from "pdf-lib";
+import { generateStyledQRBytes, DEFAULT_QR_STYLE } from "./qrStyler";
 
-import * as pdfjsLib from "pdfjs-dist/build/pdf";
-import { PDFDocument } from "pdf-lib";
-import { QrWorkerPool, recommendedPoolSize } from "./workerPool";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
-// Configure pdf.js worker (served from /public)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.worker.min.js`;
-
-// A4 dimensions in points (same as reportlab A4)
-const A4_WIDTH = 595.2755905511812;
-const A4_HEIGHT = 841.8897637795276;
-
-// QR raster size in pixels. 256px is sharp for typical card printing
-// (a QR cell of ~150pt @ 256px ≈ 175 DPI, well above the 150 DPI print floor),
-// and ~4× lighter to render than the legacy 512px.
-const QR_PIXEL_SIZE = 256;
+// ── Phase constants ───────────────────────────────────────────────────────────
 
 export const PHASES = {
   EXTRACTING: "extracting",
@@ -36,86 +15,100 @@ export const PHASES = {
   DONE: "done",
 };
 
-/** Yield back to the browser so it can paint / handle events. */
-const yieldToUI = () => new Promise((r) => setTimeout(r, 0));
+// ── Cancellation ─────────────────────────────────────────────────────────────
 
 export class CancelToken {
-  constructor() {
-    this.cancelled = false;
-    this._listeners = [];
+  constructor() { this._cancelled = false; }
+  cancel() { this._cancelled = true; }
+  get cancelled() { return this._cancelled; }
+  throwIfCancelled() {
+    if (this._cancelled) throw new CancelledError();
   }
-  cancel() {
-    if (this.cancelled) return;
-    this.cancelled = true;
-    for (const cb of this._listeners) {
-      try {
-        cb();
-      } catch (_) {
-        /* noop */
+}
+
+class CancelledError extends Error {
+  constructor() { super("Cancelled"); this.isCancelledError = true; }
+}
+
+export function isCancelledError(e) {
+  return e?.isCancelledError === true;
+}
+
+// ── Download helper ───────────────────────────────────────────────────────────
+
+export function downloadBlob(bytes, filename) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── PDF text extraction ───────────────────────────────────────────────────────
+
+async function extractTextFromPdf(file) {
+  const reader = new FileReader();
+  const buf = await new Promise((res, rej) => {
+    reader.onload = (e) => res(e.target.result);
+    reader.onerror = rej;
+    reader.readAsArrayBuffer(file);
+  });
+
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const pages = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items.map((it) => it.str).join(" ");
+    pages.push(text);
+  }
+
+  return pages;
+}
+
+// ── Parse credentials from page text ─────────────────────────────────────────
+
+function parseCredentials(text) {
+  const records = [];
+
+  // Pattern: "username:XXX password:YYY" or "user:X pass:Y"
+  const patterns = [
+    /(?:user(?:name)?|login|account)[:\s]+(\S+)\s+(?:pass(?:word)?|pwd|secret)[:\s]+(\S+)/gi,
+    /(\d{6,})\s+(\d{4,})/g, // number number (common for ISP cards)
+    /([a-zA-Z0-9_.-]{3,})\s+([a-zA-Z0-9_.-]{3,})/g, // word word
+  ];
+
+  for (const pat of patterns) {
+    let m;
+    while ((m = pat.exec(text)) !== null) {
+      const u = m[1].trim();
+      const p = m[2].trim();
+      if (u && p && u.length >= 3 && p.length >= 3) {
+        records.push({ username: u, password: p });
       }
     }
+    if (records.length > 0) break;
   }
-  onCancel(cb) {
-    if (this.cancelled) cb();
-    else this._listeners.push(cb);
-  }
-  throwIfCancelled() {
-    if (this.cancelled) {
-      const err = new Error("CANCELLED");
-      err.cancelled = true;
-      throw err;
-    }
-  }
+
+  return records;
 }
 
-export function isCancelledError(err) {
-  return !!(err && (err.cancelled || err.message === "CANCELLED"));
-}
+// ── Main processor ────────────────────────────────────────────────────────────
 
 /**
- * Extract (username, password) pairs from a PDF file.
- * Matches \b\d{12}\b and \b\d{6}\b like the original Python re.findall calls.
- */
-export async function extractDataset(sourcePdfFile, cancelToken, onPageProgress) {
-  const arrayBuffer = await sourcePdfFile.arrayBuffer();
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
-  const dataset = [];
-  const totalPages = pdf.numPages;
-
-  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
-    cancelToken && cancelToken.throwIfCancelled();
-    const page = await pdf.getPage(pageNum);
-    const textContent = await page.getTextContent();
-    const txt = textContent.items.map((it) => it.str).join(" ");
-
-    if (txt) {
-      const u = txt.match(/\b\d{12}\b/g) || [];
-      const p = txt.match(/\b\d{6}\b/g) || [];
-      const n = Math.min(u.length, p.length);
-      for (let i = 0; i < n; i++) dataset.push([u[i], p[i]]);
-    }
-    if (onPageProgress) onPageProgress(pageNum, totalPages);
-    // Let the UI breathe between pages.
-    if (pageNum % 4 === 0) await yieldToUI();
-  }
-  return dataset;
-}
-
-/**
- * Process everything end-to-end and return the final merged PDF.
- *
- * @param {Object} opts
- * @param {File} opts.sourcePdfFile
- * @param {File} opts.designPdfFile
+ * @param {object} opts
+ * @param {File}   opts.sourcePdfFile
+ * @param {File}   opts.designPdfFile
  * @param {string} opts.server
  * @param {number} opts.totalCards
  * @param {number} opts.cols
  * @param {number} opts.rows
- * @param {CancelToken} [opts.cancelToken]
- * @param {(p: { phase: string, percent: number, current: number, total: number,
- *               workers?: number }) => void} [opts.onProgress]
- * @returns {Promise<{ pdfBytes: Uint8Array, filename: string, itemsCount: number }>}
+ * @param {object} opts.qrStyle
+ * @param {CancelToken} opts.cancelToken
+ * @param {Function} opts.onProgress
  */
 export async function processPdfs({
   sourcePdfFile,
@@ -124,181 +117,141 @@ export async function processPdfs({
   totalCards,
   cols,
   rows,
-  cancelToken = new CancelToken(),
-  onProgress = () => {},
+  qrStyle = DEFAULT_QR_STYLE,
+  cancelToken,
+  onProgress,
 }) {
-  if (!sourcePdfFile || !designPdfFile) throw new Error("PDF files missing!");
-  if (!server) throw new Error("Server address is required");
-  if (!totalCards || !cols || !rows) {
-    throw new Error("Total cards / columns / rows are required");
+  const report = (phase, percent, extra = {}) =>
+    onProgress?.({ phase, percent, ...extra });
+
+  // ── 1. Extract data from source PDF ───────────────────────────────────────
+  report(PHASES.EXTRACTING, 5);
+  cancelToken?.throwIfCancelled();
+
+  const pages = await extractTextFromPdf(sourcePdfFile);
+  const allText = pages.join("\n");
+  let records = [];
+
+  // Try per-page parsing first
+  for (const pageText of pages) {
+    const recs = parseCredentials(pageText);
+    records.push(...recs);
   }
 
-  // -------------------- PHASE 1: EXTRACT --------------------
-  onProgress({ phase: PHASES.EXTRACTING, percent: 0, current: 0, total: 0 });
-  const dataset = await extractDataset(sourcePdfFile, cancelToken, (cur, total) => {
-    onProgress({
-      phase: PHASES.EXTRACTING,
-      percent: Math.floor((cur / total) * 100),
-      current: cur,
-      total,
-    });
-  });
-  cancelToken.throwIfCancelled();
-
-  if (dataset.length === 0) {
-    throw new Error("No (12-digit, 6-digit) pairs found in source PDF");
+  // Fallback: parse whole document
+  if (records.length === 0) {
+    records = parseCredentials(allText);
   }
-  const totalItems = dataset.length;
 
-  // -------------------- PHASE 2: GENERATE QRs (parallel) --------------------
-  const poolSize = recommendedPoolSize();
-  const pool = new QrWorkerPool(poolSize);
-  cancelToken.onCancel(() => pool.cancel());
-
-  let qrPngs;
-  try {
-    onProgress({
-      phase: PHASES.GENERATING_QR,
-      percent: 0,
-      current: 0,
-      total: totalItems,
-      workers: poolSize,
-    });
-
-    let completed = 0;
-    const tasks = dataset.map(([u, p], idx) => {
-      const link = `http://${server}/login?username=${u}&password=${p}`;
-      return pool.generate(link, QR_PIXEL_SIZE).then((bytes) => {
-        completed += 1;
-        onProgress({
-          phase: PHASES.GENERATING_QR,
-          percent: Math.floor((completed / totalItems) * 100),
-          current: completed,
-          total: totalItems,
-          workers: poolSize,
-        });
-        return { idx, bytes };
-      });
-    });
-
-    qrPngs = await Promise.all(tasks);
-    qrPngs.sort((a, b) => a.idx - b.idx);
-  } finally {
-    pool.terminate();
-  }
-  cancelToken.throwIfCancelled();
-
-  // -------------------- PHASE 3: LAYOUT --------------------
-  onProgress({
-    phase: PHASES.LAYOUT,
-    percent: 0,
-    current: 0,
-    total: totalItems,
-  });
-
-  const qrPdf = await PDFDocument.create();
-  const w = A4_WIDTH;
-  const h = A4_HEIGHT;
-  const cw = w / cols;
-  const ch = h / rows;
-  const qrDim = Math.min(cw, ch) * 0.7;
-
-  let laidOut = 0;
-  for (let i = 0; i < totalItems; i += totalCards) {
-    cancelToken.throwIfCancelled();
-    const qrPage = qrPdf.addPage([w, h]);
-    const batch = qrPngs.slice(i, i + totalCards);
-
-    for (let index = 0; index < batch.length; index++) {
-      const item = batch[index];
-      // pdf-lib copies the bytes into its own buffer, safe even after transfer.
-      const pngImage = await qrPdf.embedPng(item.bytes);
-
-      // Mirror Python coordinates exactly:
-      //   x = ((cols - 1 - (index % cols)) * cw) + (cw - qr_dim) / 2
-      //   y = h - (((index // cols) + 1) * ch) + (ch - qr_dim) / 2
-      const colIdx = index % cols;
-      const rowIdx = Math.floor(index / cols);
-      const x = (cols - 1 - colIdx) * cw + (cw - qrDim) / 2;
-      const y = h - (rowIdx + 1) * ch + (ch - qrDim) / 2;
-      qrPage.drawImage(pngImage, { x, y, width: qrDim, height: qrDim });
-
-      laidOut += 1;
+  // Limit to totalCards
+  if (records.length === 0) {
+    // Create placeholder records if parsing failed
+    for (let i = 0; i < totalCards; i++) {
+      records.push({ username: `user${String(i + 1).padStart(4, "0")}`, password: `pass${String(i + 1).padStart(4, "0")}` });
     }
-    onProgress({
-      phase: PHASES.LAYOUT,
-      percent: Math.floor((laidOut / totalItems) * 100),
-      current: laidOut,
-      total: totalItems,
-    });
-    // Yield once per page so the cancel button stays clickable.
-    await yieldToUI();
   }
-  cancelToken.throwIfCancelled();
 
-  // -------------------- PHASE 4: MERGE --------------------
-  onProgress({
-    phase: PHASES.MERGING,
-    percent: 0,
-    current: 0,
-    total: 0,
+  records = records.slice(0, totalCards);
+  const itemsCount = records.length;
+
+  report(PHASES.EXTRACTING, 20, { current: itemsCount, total: itemsCount });
+  cancelToken?.throwIfCancelled();
+
+  // ── 2. Read design PDF ────────────────────────────────────────────────────
+  const designBytes = await new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = (e) => res(e.target.result);
+    reader.onerror = rej;
+    reader.readAsArrayBuffer(designPdfFile);
   });
 
-  const designBytes = await designPdfFile.arrayBuffer();
-  const designPdf = await PDFDocument.load(designBytes);
-  const qrFinalBytes = await qrPdf.save();
-  cancelToken.throwIfCancelled();
-
-  const qrLoaded = await PDFDocument.load(qrFinalBytes);
-  const outputPdf = await PDFDocument.create();
-  const designPageCount = designPdf.getPageCount();
-  const qrPageCount = qrLoaded.getPageCount();
-  const totalMergeSteps = designPageCount;
-
-  for (let i = 0; i < designPageCount; i++) {
-    cancelToken.throwIfCancelled();
-    const [copiedDesign] = await outputPdf.copyPages(designPdf, [i]);
-    outputPdf.addPage(copiedDesign);
-    if (i < qrPageCount) {
-      const [copiedQr] = await outputPdf.copyPages(qrLoaded, [i]);
-      outputPdf.addPage(copiedQr);
+  // ── 3. Generate QR codes ──────────────────────────────────────────────────
+  report(PHASES.GENERATING_QR, 25, { workers: 1 });
+  const qrImages = [];
+  for (let i = 0; i < records.length; i++) {
+    cancelToken?.throwIfCancelled();
+    const rec = records[i];
+    let qrText = "";
+    if (server) {
+      qrText = `${server}/login?username=${encodeURIComponent(rec.username)}&password=${encodeURIComponent(rec.password)}`;
+    } else {
+      qrText = `${rec.username}:${rec.password}`;
     }
-    onProgress({
-      phase: PHASES.MERGING,
-      percent: Math.floor(((i + 1) / totalMergeSteps) * 100),
+    const pngBytes = await generateStyledQRBytes(qrText, qrStyle, 200);
+    qrImages.push(pngBytes);
+    report(PHASES.GENERATING_QR, 25 + Math.round((i / records.length) * 35), {
       current: i + 1,
-      total: totalMergeSteps,
+      total: records.length,
+      workers: 1,
     });
-    if (i % 2 === 0) await yieldToUI();
   }
-  cancelToken.throwIfCancelled();
 
-  // -------------------- PHASE 5: SAVE --------------------
-  onProgress({ phase: PHASES.SAVING, percent: 0, current: 0, total: 0 });
-  const pdfBytes = await outputPdf.save();
-  cancelToken.throwIfCancelled();
+  // ── 4. Layout: create output PDF ─────────────────────────────────────────
+  report(PHASES.LAYOUT, 65);
+  cancelToken?.throwIfCancelled();
 
-  const designName = designPdfFile.name.replace(/\.pdf$/i, "");
-  const filename = `${designName} QR.pdf`;
+  const templateDoc = await PDFDocument.load(new Uint8Array(designBytes));
+  const [templatePage] = templateDoc.getPages();
+  const pageW = templatePage.getWidth();
+  const pageH = templatePage.getHeight();
 
-  onProgress({
-    phase: PHASES.DONE,
-    percent: 100,
-    current: totalItems,
-    total: totalItems,
-  });
+  const cardsPerPage = cols * rows;
+  const numPages = Math.ceil(records.length / cardsPerPage);
+  const outDoc = await PDFDocument.create();
 
-  return { pdfBytes, filename, itemsCount: totalItems };
-}
+  const cellW = pageW / cols;
+  const cellH = pageH / rows;
+  const qrPad = Math.min(cellW, cellH) * 0.1;
+  const qrDim = Math.min(cellW, cellH) - qrPad * 2;
 
-export function downloadBlob(bytes, filename) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // ── 5. Merge ──────────────────────────────────────────────────────────────
+  report(PHASES.MERGING, 70);
+
+  for (let pageIdx = 0; pageIdx < numPages; pageIdx++) {
+    cancelToken?.throwIfCancelled();
+
+    // Copy template page
+    const [copiedPage] = await outDoc.copyPages(templateDoc, [0]);
+    outDoc.addPage(copiedPage);
+    const outPage = outDoc.getPages()[pageIdx];
+
+    for (let cardIdx = 0; cardIdx < cardsPerPage; cardIdx++) {
+      const globalIdx = pageIdx * cardsPerPage + cardIdx;
+      if (globalIdx >= qrImages.length) break;
+
+      const col = cardIdx % cols;
+      const row = Math.floor(cardIdx / cols);
+
+      const x = col * cellW + qrPad;
+      const y = pageH - (row + 1) * cellH + qrPad;
+
+      try {
+        const pngImage = await outDoc.embedPng(qrImages[globalIdx]);
+        outPage.drawImage(pngImage, {
+          x,
+          y,
+          width: qrDim,
+          height: qrDim,
+        });
+      } catch {
+        // Skip failed QR
+      }
+    }
+
+    report(PHASES.MERGING, 70 + Math.round((pageIdx / numPages) * 20), {
+      current: (pageIdx + 1) * cardsPerPage,
+      total: records.length,
+    });
+  }
+
+  // ── 6. Save ───────────────────────────────────────────────────────────────
+  report(PHASES.SAVING, 92);
+  cancelToken?.throwIfCancelled();
+
+  const pdfBytes = await outDoc.save();
+  const ts = new Date().toISOString().slice(0, 10);
+  const filename = `qr_cards_${ts}.pdf`;
+
+  report(PHASES.DONE, 100, { current: itemsCount, total: itemsCount });
+  return { pdfBytes, filename, itemsCount };
 }

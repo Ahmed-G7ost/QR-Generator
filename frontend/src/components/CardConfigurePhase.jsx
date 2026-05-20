@@ -4,18 +4,10 @@ import CardPreview from "./CardPreview";
 const TEMPLATES_KEY = "qr_card_saved_templates_v1";
 
 function loadSavedTemplates() {
-  try {
-    const raw = localStorage.getItem(TEMPLATES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]"); } catch { return []; }
 }
-
 function persistSavedTemplates(list) {
-  try {
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list));
-  } catch { /* quota / private mode */ }
+  try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list)); } catch {}
 }
 
 const GRID_OPTIONS = [
@@ -26,8 +18,8 @@ const GRID_OPTIONS = [
 ];
 
 const QR_CONTENT_OPTIONS = [
-  { value: "username", labelKey: "username" },
-  { value: "password", labelKey: "password" },
+  { value: "username", labelKey: "username_label" },
+  { value: "password", labelKey: "password_label" },
   { value: "both", labelKey: "qrBoth" },
   { value: "link", labelKey: "qrLink" },
 ];
@@ -36,8 +28,10 @@ function SliderRow({ label, value, onChange, min, max, testId }) {
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs text-white/50 w-14 text-end shrink-0">{label}</span>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.target.value))}
-        data-testid={testId} className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer" />
+      <input type="range" min={min} max={max} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        data-testid={testId}
+        className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-cyan-400" />
       <span className="text-xs font-mono text-white/60 w-8">{value}</span>
     </div>
   );
@@ -46,8 +40,12 @@ function SliderRow({ label, value, onChange, min, max, testId }) {
 function ColorPicker({ value, onChange, testId }) {
   return (
     <div className="flex items-center gap-2">
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
-        data-testid={testId} className="h-6 w-6 border border-white/20 rounded cursor-pointer bg-transparent p-0" />
+      <div className="relative w-6 h-6">
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)}
+          data-testid={testId}
+          className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+        <div className="w-6 h-6 rounded border border-white/20 cursor-pointer" style={{ backgroundColor: value }} />
+      </div>
       <span className="font-mono text-[10px] text-white/40">{value}</span>
     </div>
   );
@@ -77,12 +75,11 @@ function ToggleBtn({ checked, onChange, testId }) {
 }
 
 export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, onBack }) {
-  const { config, records, templateUrl, sessionId } = state;
+  const { config, records, templateUrl } = state;
   const sampleRecord = records[0] || { username: "123456789012", password: "123456" };
   const updateConfig = (key, value) => dispatch({ type: "UPDATE_CONFIG", payload: { [key]: value } });
   const fontInputRef = useRef(null);
 
-  // Saved templates
   const [templates, setTemplates] = useState([]);
   const [templateName, setTemplateName] = useState("");
   const [showSaveInput, setShowSaveInput] = useState(false);
@@ -91,7 +88,6 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
 
   const saveTemplate = () => {
     if (!templateName.trim()) return;
-    // Exclude non-serializable custom_font (File object) before saving.
     const { custom_font: _omit, ...serializable } = config;
     const id = String(Date.now());
     const next = [...templates, { id, name: templateName.trim(), config: serializable }];
@@ -108,16 +104,13 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
     persistSavedTemplates(next);
   };
 
-  // Font upload — store the File itself in state for later embedding via fontkit.
   const handleFontUpload = (file) => {
     if (!file) return;
     const ext = file.name.split(".").pop().toLowerCase();
     if (!["ttf", "otf", "woff"].includes(ext)) return;
-    // Store the File object directly; cardProcessor reads bytes when generating.
     updateConfig("custom_font", file);
   };
 
-  // Handle drag position from preview
   const handlePositionChange = useCallback((key, value) => {
     updateConfig(key, value);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,7 +121,6 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: Controls */}
         <div className="lg:col-span-3 space-y-4">
-
           {/* Saved Templates */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <div className="flex items-center justify-between mb-3">
@@ -205,7 +197,6 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
             </div>
             {config.show_qr && (
               <div className="space-y-3">
-                {/* QR Content */}
                 <div className="grid grid-cols-2 gap-2">
                   {QR_CONTENT_OPTIONS.map((opt) => (
                     <button key={opt.value} data-testid={`qr-content-${opt.value}`}
@@ -218,28 +209,16 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
                     </button>
                   ))}
                 </div>
-                
-                {/* Server Address for Link option */}
                 {config.qr_content === "link" && (
                   <div className="space-y-2">
                     <label className="text-xs text-white/50">{t.qrServerAddress}</label>
-                    <input
-                      type="text"
-                      value={config.server_address || ""}
+                    <input type="text" value={config.server_address || ""}
                       onChange={(e) => updateConfig("server_address", e.target.value)}
                       placeholder={t.qrServerPlaceholder}
                       data-testid="qr-server-input"
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-cyan-400/50 placeholder:text-white/30"
-                    />
-                    <p className="text-[10px] text-white/30">
-                      {lang === "ar" 
-                        ? "سيتم إنشاء رابط: http://[السيرفر]/login?username=[اليوزر]&password=[الباسورد]"
-                        : "Will generate: http://[server]/login?username=[user]&password=[pass]"
-                      }
-                    </p>
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-cyan-400/50 placeholder:text-white/30" />
                   </div>
                 )}
-                
                 <SliderRow label={t.qrSizeLabel} value={config.qr_size} onChange={(v) => updateConfig("qr_size", v)} min={5} max={60} testId="qr-size-slider" />
                 <SliderRow label={t.positionX} value={config.qr_x} onChange={(v) => updateConfig("qr_x", v)} min={0} max={100} testId="qr-x-slider" />
                 <SliderRow label={t.positionY} value={config.qr_y} onChange={(v) => updateConfig("qr_y", v)} min={0} max={100} testId="qr-y-slider" />
@@ -247,7 +226,7 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
             )}
           </div>
 
-          {/* Date + Counter */}
+          {/* Date */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs uppercase tracking-[0.2em] text-white/50 font-bold">{t.dateToggle}</span>
@@ -285,12 +264,11 @@ export default function CardConfigurePhase({ t, lang, state, dispatch, onNext, o
             )}
           </div>
 
-          {/* Username & Password */}
           <TextBlock title={t.usernameSettings} config={config} prefix="username" onChange={updateConfig} t={t} colorKey="username_color" />
           <TextBlock title={t.passwordSettings} config={config} prefix="password" onChange={updateConfig} t={t} colorKey="password_color" />
         </div>
 
-        {/* Right: Interactive Preview */}
+        {/* Right: Preview */}
         <div className="lg:col-span-2 relative">
           <div className="sticky top-6 space-y-3">
             <span className="text-xs uppercase tracking-[0.2em] text-white/50 font-bold">{t.preview}</span>
