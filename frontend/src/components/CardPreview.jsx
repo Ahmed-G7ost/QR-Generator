@@ -234,3 +234,4 @@ export default function CardPreview({ templateUrl, sampleRecord, config, onPosit
     </div>
   );
 }
+
