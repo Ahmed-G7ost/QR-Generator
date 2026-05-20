@@ -13,6 +13,7 @@
 import { PDFDocument, StandardFonts, rgb, degrees } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import QRCode from "qrcode";
+import { generateStyledQrPng } from "@/components/QrStyleCustomizer";
 
 // A4 in PDF points
 const A4_W = 595.2755905511812;
@@ -50,19 +51,32 @@ async function embedTemplate(pdfDoc, templateFile) {
   return pdfDoc.embedJpg(bytes);
 }
 
-async function generateQrPng(text) {
-  // Tiny 1-bit-style PNG. `qrcode` returns a data URL by default; use buffer.
+async function generateQrPng(text, config, logoImgEl, fgImgEl) {
+  // Use styled QR if any customization is present
+  const hasCustom = config && (
+    config.qr_fg_color !== "#000000" || config.qr_bg_color !== "#ffffff" ||
+    config.qr_dot_style !== "square" || config.qr_eye_color ||
+    config.qr_use_gradient || config.qr_frame || config.qr_bg_shape !== "none" ||
+    logoImgEl || fgImgEl
+  );
+
+  if (hasCustom) {
+    // Returns { bytes, isJpeg: true }
+    return generateStyledQrPng(text, 128, config || {}, logoImgEl, fgImgEl);
+  }
+
+  // Fallback: original tiny PNG for zero-customization (smallest file)
   const dataUrl = await QRCode.toDataURL(text, {
     errorCorrectionLevel: "M",
     margin: 1,
-    width: 256,
+    width: 128,
     color: { dark: "#000000", light: "#ffffff" },
   });
   const base64 = dataUrl.split(",")[1];
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return { bytes, isJpeg: false };
 }
 
 /**
@@ -186,12 +200,39 @@ export async function generateCardsPdf({
     total: totalRecords,
   });
 
-  // Pre-build QR cache by content key.
+  // Pre-build QR cache by content key + load logo & fg image for styled QR.
+  let logoImgEl = null;
+  let fgImgEl = null;
+  if (config.show_qr && config.qr_logo) {
+    try {
+      const logoUrl = URL.createObjectURL(config.qr_logo);
+      logoImgEl = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = logoUrl;
+      });
+      URL.revokeObjectURL(logoUrl);
+    } catch { /* logo load failed, proceed without */ }
+  }
+  if (config.show_qr && config.qr_fg_image) {
+    try {
+      const fgUrl = URL.createObjectURL(config.qr_fg_image);
+      fgImgEl = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = fgUrl;
+      });
+      URL.revokeObjectURL(fgUrl);
+    } catch { /* fg image load failed, proceed without */ }
+  }
+
   const qrCache = new Map();
   async function getQrImage(key) {
     if (qrCache.has(key)) return qrCache.get(key);
-    const png = await generateQrPng(key);
-    const img = await pdfDoc.embedPng(png);
+    const { bytes, isJpeg } = await generateQrPng(key, config, logoImgEl, fgImgEl);
+    const img = isJpeg ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
     qrCache.set(key, img);
     return img;
   }
@@ -334,3 +375,4 @@ export function previewPdfBlob(pdfBytes) {
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
