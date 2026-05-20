@@ -313,17 +313,20 @@ export function drawStyledQr(ctx, qrData, opts) {
 }
 
 /**
- * Generates a QR PNG Uint8Array with custom styles. Used by cardProcessor.
+ * Generates a QR image (Uint8Array) with custom styles. Used by cardProcessor.
+ * Returns { bytes, isJpeg } — JPEG for styled QR (small), PNG for simple.
  */
 export async function generateStyledQrPng(text, width, qrConfig, logoImgElement, fgImgElement) {
+  // Use 128px for PDF — QR is perfectly readable at this size
+  const renderSize = 128;
   const canvas = typeof OffscreenCanvas !== "undefined"
-    ? new OffscreenCanvas(width, width)
+    ? new OffscreenCanvas(renderSize, renderSize)
     : document.createElement("canvas");
-  if (canvas.width !== undefined) { canvas.width = width; canvas.height = width; }
+  if (canvas.width !== undefined) { canvas.width = renderSize; canvas.height = renderSize; }
   const ctx = canvas.getContext("2d");
 
   drawStyledQr(ctx, text, {
-    width, height: width, x: 0, y: 0,
+    width: renderSize, height: renderSize, x: 0, y: 0,
     fgColor: qrConfig.qr_fg_color || "#000000",
     bgColor: qrConfig.qr_bg_color || "#ffffff",
     dotStyle: qrConfig.qr_dot_style || "square",
@@ -334,21 +337,22 @@ export async function generateStyledQrPng(text, width, qrConfig, logoImgElement,
     gradientType: qrConfig.qr_gradient_type || "linear",
     frame: qrConfig.qr_frame || false,
     frameColor: qrConfig.qr_frame_color || "#000000",
-    frameWidth: (qrConfig.qr_frame_width || 2) * (width / 200),
+    frameWidth: (qrConfig.qr_frame_width || 2) * (renderSize / 200),
     bgShape: qrConfig.qr_bg_shape || "none",
     logoImg: logoImgElement || null,
     logoSize: qrConfig.qr_logo_size || 20,
     fgImage: fgImgElement || null,
   });
 
+  // Use JPEG with compression for much smaller PDF output
   let blob;
   if (canvas.convertToBlob) {
-    blob = await canvas.convertToBlob({ type: "image/png" });
+    blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 });
   } else {
-    blob = await new Promise(r => canvas.toBlob(r, "image/png"));
+    blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.7));
   }
   const buffer = await blob.arrayBuffer();
-  return new Uint8Array(buffer);
+  return { bytes: new Uint8Array(buffer), isJpeg: true };
 }
 
 /* ======================== QR STYLE CUSTOMIZER COMPONENT ======================== */
