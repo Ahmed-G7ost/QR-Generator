@@ -328,8 +328,8 @@ export default function QrGenerator({ t, lang }) {
                 </span>
               </button>
               {showQrStyle && (
-                <div data-testid="qr-style-wrapper">
-                  <QrStyleCustomizer config={qrStyle} updateConfig={updateQrStyle} t={t} />
+                <div data-testid="qr-style-wrapper" className="min-w-0">
+                  <QrStyleCustomizer config={qrStyle} updateConfig={updateQrStyle} t={t} compact={true} />
                 </div>
               )}
             </div>

@@ -364,7 +364,7 @@ export async function generateStyledQrPng(text, width, qrConfig, logoImgElement,
 }
 
 /* ======================== QR STYLE CUSTOMIZER COMPONENT ======================== */
-export default function QrStyleCustomizer({ config, updateConfig, t }) {
+export default function QrStyleCustomizer({ config, updateConfig, t, compact = false }) {
   const canvasRef = useRef(null);
   const logoImgRef = useRef(null);
   const logoInputRef = useRef(null);
@@ -488,7 +488,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t }) {
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className={`grid gap-4 ${compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
         {/* Left: Controls */}
         <div className="space-y-3">
           {/* Colors */}
@@ -650,12 +650,12 @@ export default function QrStyleCustomizer({ config, updateConfig, t }) {
         </div>
 
         {/* Right: Live QR Preview */}
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col items-center gap-2 min-w-0">
           <span className="text-[11px] text-white/40 font-semibold">{t.qrStylePreview}</span>
-          <div className="rounded-xl border border-white/10 bg-[#0d0d18] p-2" data-testid="qr-style-preview-wrapper">
+          <div className="rounded-xl border border-white/10 bg-[#0d0d18] p-2 w-full max-w-[280px]" data-testid="qr-style-preview-wrapper">
             <canvas ref={canvasRef} width={280} height={280}
-              className="rounded-lg"
-              style={{ width: 280, height: 280 }}
+              className="rounded-lg block w-full h-auto"
+              style={{ aspectRatio: "1 / 1" }}
               data-testid="qr-style-preview-canvas" />
           </div>
           {logoPreviewUrl && (
