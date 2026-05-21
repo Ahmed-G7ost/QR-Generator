@@ -14,6 +14,7 @@
 import * as pdfjsLib from "pdfjs-dist/build/pdf";
 import { PDFDocument } from "pdf-lib";
 import { QrWorkerPool, recommendedPoolSize } from "./workerPool";
+import { generateStyledQrPng } from "../components/QrStyleCustomizer";
 
 // Configure pdf.js worker (served from /public)
 pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.worker.min.js`;
@@ -126,6 +127,7 @@ export async function processPdfs({
   totalCards,
   cols,
   rows,
+  qrStyle,
   cancelToken = new CancelToken(),
   onProgress = () => {},
 }) {
@@ -167,41 +169,96 @@ export async function processPdfs({
   }
   const totalItems = dataset.length;
 
-  // -------------------- PHASE 2: GENERATE QRs (parallel) --------------------
-  const poolSize = recommendedPoolSize();
-  const pool = new QrWorkerPool(poolSize);
-  cancelToken.onCancel(() => pool.cancel());
+  // -------------------- PHASE 2: GENERATE QRs --------------------
+  // Decide whether to use styled QR (with user customization) or the fast
+  // default worker pool. Any customization or attached image/logo triggers
+  // the styled renderer (slower but supports all visual options).
+  const hasCustomStyle = !!(qrStyle && (
+    (qrStyle.qr_fg_color && qrStyle.qr_fg_color !== "#000000") ||
+    (qrStyle.qr_bg_color && qrStyle.qr_bg_color !== "#ffffff") ||
+    (qrStyle.qr_dot_style && qrStyle.qr_dot_style !== "square") ||
+    qrStyle.qr_eye_color ||
+    qrStyle.qr_use_gradient ||
+    qrStyle.qr_frame ||
+    (qrStyle.qr_bg_shape && qrStyle.qr_bg_shape !== "none") ||
+    qrStyle.qr_logo ||
+    qrStyle.qr_fg_image
+  ));
 
-  let qrPngs;
-  try {
+  let qrItems; // [{ idx, bytes, isJpeg }]
+
+  if (hasCustomStyle) {
     onProgress({
       phase: PHASES.GENERATING_QR,
       percent: 0,
       current: 0,
       total: totalItems,
-      workers: poolSize,
+      workers: 1,
     });
 
-    let completed = 0;
-    const tasks = dataset.map(([u, p], idx) => {
+    // Pre-load logo / fg image elements once (reuse for all QRs)
+    const loadImg = (file) => new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { resolve(img); /* keep url alive until after loop */ };
+      img.onerror = (e) => reject(e);
+      img.src = url;
+    });
+    const logoImg = qrStyle.qr_logo ? await loadImg(qrStyle.qr_logo) : null;
+    const fgImg = qrStyle.qr_fg_image ? await loadImg(qrStyle.qr_fg_image) : null;
+
+    qrItems = [];
+    for (let i = 0; i < dataset.length; i++) {
+      cancelToken.throwIfCancelled();
+      const [u, p] = dataset[i];
       const link = `http://${server}/login?username=${u}&password=${p}`;
-      return pool.generate(link, QR_PIXEL_SIZE).then((bytes) => {
-        completed += 1;
-        onProgress({
-          phase: PHASES.GENERATING_QR,
-          percent: Math.floor((completed / totalItems) * 100),
-          current: completed,
-          total: totalItems,
-          workers: poolSize,
-        });
-        return { idx, bytes };
+      const { bytes, isJpeg } = await generateStyledQrPng(link, QR_PIXEL_SIZE, qrStyle, logoImg, fgImg);
+      qrItems.push({ idx: i, bytes, isJpeg });
+      onProgress({
+        phase: PHASES.GENERATING_QR,
+        percent: Math.floor(((i + 1) / totalItems) * 100),
+        current: i + 1,
+        total: totalItems,
+        workers: 1,
       });
-    });
+      // Yield every few items so UI stays responsive
+      if (i % 4 === 3) await yieldToUI();
+    }
+  } else {
+    const poolSize = recommendedPoolSize();
+    const pool = new QrWorkerPool(poolSize);
+    cancelToken.onCancel(() => pool.cancel());
 
-    qrPngs = await Promise.all(tasks);
-    qrPngs.sort((a, b) => a.idx - b.idx);
-  } finally {
-    pool.terminate();
+    try {
+      onProgress({
+        phase: PHASES.GENERATING_QR,
+        percent: 0,
+        current: 0,
+        total: totalItems,
+        workers: poolSize,
+      });
+
+      let completed = 0;
+      const tasks = dataset.map(([u, p], idx) => {
+        const link = `http://${server}/login?username=${u}&password=${p}`;
+        return pool.generate(link, QR_PIXEL_SIZE).then((bytes) => {
+          completed += 1;
+          onProgress({
+            phase: PHASES.GENERATING_QR,
+            percent: Math.floor((completed / totalItems) * 100),
+            current: completed,
+            total: totalItems,
+            workers: poolSize,
+          });
+          return { idx, bytes, isJpeg: false };
+        });
+      });
+
+      qrItems = await Promise.all(tasks);
+      qrItems.sort((a, b) => a.idx - b.idx);
+    } finally {
+      pool.terminate();
+    }
   }
   cancelToken.throwIfCancelled();
 
@@ -224,12 +281,14 @@ export async function processPdfs({
   for (let i = 0; i < totalItems; i += totalCards) {
     cancelToken.throwIfCancelled();
     const qrPage = qrPdf.addPage([w, h]);
-    const batch = qrPngs.slice(i, i + totalCards);
+    const batch = qrItems.slice(i, i + totalCards);
 
     for (let index = 0; index < batch.length; index++) {
       const item = batch[index];
       // pdf-lib copies the bytes into its own buffer, safe even after transfer.
-      const pngImage = await qrPdf.embedPng(item.bytes);
+      const pngImage = item.isJpeg
+        ? await qrPdf.embedJpg(item.bytes)
+        : await qrPdf.embedPng(item.bytes);
 
       // Mirror Python coordinates exactly:
       //   x = ((cols - 1 - (index % cols)) * cw) + (cw - qr_dim) / 2

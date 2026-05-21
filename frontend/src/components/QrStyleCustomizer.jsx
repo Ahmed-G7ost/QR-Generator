@@ -163,38 +163,46 @@ export function drawStyledQr(ctx, qrData, opts) {
       }
     }
 
-    // 5. Apply dot style shaping to data modules (round/dot edges)
-    if (dotStyle !== "square") {
+    // 5. Apply per-cell solid sampled color for every data module — including
+    //    "square" style. This is critical for readability: sampling the image
+    //    once per cell keeps the QR pattern crisp instead of bleeding fine
+    //    image detail across multiple modules (which made the QR shape
+    //    unreadable and chaotic).
+    {
+      // Downsample the image to one pixel per QR cell in a single pass.
+      const sampleCanvas = document.createElement("canvas");
+      sampleCanvas.width = total;
+      sampleCanvas.height = total;
+      const sampleCtx = sampleCanvas.getContext("2d");
+      sampleCtx.imageSmoothingEnabled = true;
+      sampleCtx.drawImage(fgImage, 0, 0, total, total);
+      const sampled = sampleCtx.getImageData(0, 0, total, total).data;
+
       for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
           if (!modules.get(r, c)) continue;
           if (isFinderCell(r, c)) continue;
           const cx = x + (c + margin) * cellW;
           const cy = y + (r + margin) * cellH;
-          // Clear the square cell
+          // Clear the cell back to bg first (erase the underlying full image)
           ctx.fillStyle = bgColor;
           ctx.fillRect(cx, cy, cellW, cellH);
-          // Re-sample color from image for this cell
-          const imgSrcX = ((c + margin) / total) * fgImage.naturalWidth;
-          const imgSrcY = ((r + margin) / total) * fgImage.naturalHeight;
-          const cW = (1 / total) * fgImage.naturalWidth;
-          const cH = (1 / total) * fgImage.naturalHeight;
-          const tc = document.createElement("canvas");
-          tc.width = 1; tc.height = 1;
-          const tctx = tc.getContext("2d");
-          tctx.drawImage(fgImage, imgSrcX, imgSrcY, cW, cH, 0, 0, 1, 1);
-          const px = tctx.getImageData(0, 0, 1, 1).data;
-          ctx.fillStyle = `rgb(${px[0]},${px[1]},${px[2]})`;
+
+          const sIdx = ((r + margin) * total + (c + margin)) * 4;
+          ctx.fillStyle = `rgb(${sampled[sIdx]},${sampled[sIdx + 1]},${sampled[sIdx + 2]})`;
 
           if (dotStyle === "dots") {
             ctx.beginPath();
-            ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.42, 0, Math.PI * 2);
+            ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.46, 0, Math.PI * 2);
             ctx.fill();
-          } else {
+          } else if (dotStyle === "rounded") {
             const rr = cellW * 0.35;
             ctx.beginPath();
             ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
             ctx.fill();
+          } else {
+            // square — fill the full cell so the QR pattern is crisp & scannable
+            ctx.fillRect(cx, cy, cellW, cellH);
           }
         }
       }

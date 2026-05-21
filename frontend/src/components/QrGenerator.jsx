@@ -6,6 +6,7 @@ import {
   CancelToken,
   isCancelledError,
 } from "@/lib/pdfProcessor";
+import QrStyleCustomizer from "@/components/QrStyleCustomizer";
 
 /* ----------------------------- File drop zone ----------------------------- */
 const Dropzone = ({ title, hint, files, onFiles, onRemove, t, testId, accent, disabled, multiple = false }) => {
@@ -135,6 +136,24 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
 };
 
 /* ------------------------------- QR Generator ------------------------------ */
+const DEFAULT_QR_STYLE = {
+  qr_fg_color: "#000000",
+  qr_bg_color: "#ffffff",
+  qr_dot_style: "square",
+  qr_eye_color: "",
+  qr_use_gradient: false,
+  qr_gradient_color1: "#000000",
+  qr_gradient_color2: "#0066ff",
+  qr_gradient_type: "linear",
+  qr_frame: false,
+  qr_frame_color: "#000000",
+  qr_frame_width: 2,
+  qr_bg_shape: "none",
+  qr_logo: null,
+  qr_logo_size: 20,
+  qr_fg_image: null,
+};
+
 export default function QrGenerator({ t, lang }) {
   const [sourcePdfs, setSourcePdfs] = useState([]);
   const [designPdfs, setDesignPdfs] = useState([]);
@@ -142,12 +161,18 @@ export default function QrGenerator({ t, lang }) {
   const [totalCards, setTotalCards] = useState(8);
   const [cols, setCols] = useState(2);
   const [rows, setRows] = useState(4);
+  const [qrStyle, setQrStyle] = useState({ ...DEFAULT_QR_STYLE });
+  const [showQrStyle, setShowQrStyle] = useState(false);
   const [status, setStatus] = useState({ phase: null, message: "", percent: 0, current: 0, total: 0, workers: 0 });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [cancelled, setCancelled] = useState(false);
   const cancelTokenRef = useRef(null);
+
+  const updateQrStyle = useCallback((key, value) => {
+    setQrStyle((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   // Append new source PDFs (don't replace)
   const addSourcePdfs = useCallback((newFiles) => {
@@ -160,6 +185,7 @@ export default function QrGenerator({ t, lang }) {
 
   const resetAll = useCallback(() => {
     setSourcePdfs([]); setDesignPdfs([]); setServer(""); setTotalCards(8); setCols(2); setRows(4);
+    setQrStyle({ ...DEFAULT_QR_STYLE });
     setStatus({ phase: null, message: "", percent: 0, current: 0, total: 0, workers: 0 });
     setProcessing(false); setResult(null); setError(""); setCancelled(false); cancelTokenRef.current = null;
   }, []);
@@ -181,6 +207,7 @@ export default function QrGenerator({ t, lang }) {
       const { pdfBytes, filename, itemsCount } = await processPdfs({
         sourcePdfFiles: sourcePdfs, designPdfFile: designPdfs[0], server: server.trim(),
         totalCards: parseInt(totalCards, 10), cols: parseInt(cols, 10), rows: parseInt(rows, 10),
+        qrStyle,
         cancelToken, onProgress: (p) => setStatus((s) => ({ ...s, ...p })),
       });
       setResult({ bytes: pdfBytes, filename, count: itemsCount });
@@ -189,7 +216,7 @@ export default function QrGenerator({ t, lang }) {
       if (isCancelledError(e)) { resetAll(); return; }
       console.error(e); setError(e.message || t.errorGeneric);
     } finally { setProcessing(false); cancelTokenRef.current = null; }
-  }, [sourcePdfs, designPdfs, server, totalCards, cols, rows, t, resetAll]);
+  }, [sourcePdfs, designPdfs, server, totalCards, cols, rows, qrStyle, t, resetAll]);
 
   const handleDownload = () => { if (result) downloadBlob(result.bytes, result.filename); };
   const handlePreview = () => {
@@ -279,6 +306,32 @@ export default function QrGenerator({ t, lang }) {
                 <NumberField label={t.colsLabel} value={cols} onChange={setCols} testId="cols-input" disabled={processing} />
                 <NumberField label={t.rowsLabel} value={rows} onChange={setRows} testId="rows-input" disabled={processing} />
               </div>
+
+              {/* QR style customization toggle */}
+              <button
+                type="button"
+                data-testid="qr-style-toggle"
+                onClick={() => setShowQrStyle((v) => !v)}
+                disabled={processing}
+                className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] px-4 py-3 transition disabled:opacity-50"
+              >
+                <span className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-white/70 font-semibold">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  {t.qrStyle}
+                </span>
+                <span className={`text-white/50 transition-transform ${showQrStyle ? "rotate-180" : ""}`}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </span>
+              </button>
+              {showQrStyle && (
+                <div data-testid="qr-style-wrapper">
+                  <QrStyleCustomizer config={qrStyle} updateConfig={updateQrStyle} t={t} />
+                </div>
+              )}
             </div>
 
             <div className="mt-6"><PhaseStepper t={t} currentPhase={status.phase} completed={isDone} /></div>
