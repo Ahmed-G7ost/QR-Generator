@@ -92,15 +92,16 @@ export function drawStyledQr(ctx, qrData, opts) {
   }
 
   // =========== fgImage mode ===========
-  // Strategy (matches the PAY reference image):
-  //   1. The image is drawn as a full visible background
-  //   2. A high-quality per-cell color table is built from the image
-  //   3. QR dots (smaller than the cell) are drawn ON TOP of the image,
-  //      each colored with its exact sampled pixel — the gaps between dots
-  //      let the underlying image show through, making the logo visible
-  //   4. Finder eyes use the average sampled color of their region
+  // Strategy (matches the reference image):
+  //   • bgColor fills the entire QR area as a clean solid background
+  //   • Every QR dot gets its exact color sampled from the image at the
+  //     corresponding position — no contrast inversion, just the raw pixel color
+  //   • Finder patterns (eyes) are drawn with the sampled color from the image
+  //     with a white ring so they remain recognisable over any background
   if (fgImage) {
-    // --- Step 1: Build high-quality per-cell color table (4× oversampling)
+    // --- Step 1: Downsample the image to QR-grid resolution (one pixel per cell)
+    //     High-quality area-average gives the dominant color for each cell.
+    const sampleSize = total * 4; // 4× oversampling then average
     const hiCanvas = document.createElement("canvas");
     hiCanvas.width = total * 4;
     hiCanvas.height = total * 4;
@@ -110,6 +111,7 @@ export function drawStyledQr(ctx, qrData, opts) {
     hiCtx.drawImage(fgImage, 0, 0, total * 4, total * 4);
     const hiData = hiCtx.getImageData(0, 0, total * 4, total * 4).data;
 
+    // Build a (total × total) averaged color table
     const cellColors = new Uint8Array(total * total * 3);
     for (let row = 0; row < total; row++) {
       for (let col = 0; col < total; col++) {
@@ -127,11 +129,13 @@ export function drawStyledQr(ctx, qrData, opts) {
       }
     }
 
+    // Helper: get sampled color string for a grid cell (row, col in 0..total-1)
     const cellColor = (row, col) => {
       const base = (row * total + col) * 3;
       return `rgb(${cellColors[base]},${cellColors[base + 1]},${cellColors[base + 2]})`;
     };
 
+    // Helper: get average sampled color over a rectangular region of the grid
     const regionColor = (startRow, startCol, rows, cols) => {
       let rS = 0, gS = 0, bS = 0, n = 0;
       for (let dr = 0; dr < rows; dr++) {
@@ -144,16 +148,18 @@ export function drawStyledQr(ctx, qrData, opts) {
       return { r: Math.round(rS / n), g: Math.round(gS / n), b: Math.round(bS / n) };
     };
 
-    // --- Step 2: Draw the image as a full visible background
-    ctx.drawImage(fgImage, x, y, width, height);
+    // --- Step 2: Fill the whole QR area with bgColor (clean, solid background)
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x, y, width, height);
 
-    // --- Step 3: Draw finder patterns (eyes) on top — sampled color + bgColor ring
+    // --- Step 3: Draw finder patterns (eyes) with image-sampled color + white ring
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
       const fw = cellW * 7;
       const fh = cellH * 7;
 
+      // Average color of the 7×7 finder region in the image
       const { r: avgR, g: avgG, b: avgB } = regionColor(fp.r + margin, fp.c + margin, 7, 7);
       const finderDotColor = eyeColor || `rgb(${avgR},${avgG},${avgB})`;
 
@@ -182,10 +188,7 @@ export function drawStyledQr(ctx, qrData, opts) {
       }
     }
 
-    // --- Step 4: Draw data module dots ON TOP of the image.
-    //     Dots are slightly smaller than the cell so the image shows through
-    //     the gaps — this is what makes the logo/background visible.
-    //     Each dot is colored with its exact sampled image color for harmony.
+    // --- Step 4: Draw every data module dot with its exact sampled image color
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (!modules.get(r, c)) continue;
@@ -196,19 +199,16 @@ export function drawStyledQr(ctx, qrData, opts) {
         ctx.fillStyle = cellColor(r + margin, c + margin);
 
         if (dotStyle === "dots") {
-          // dots style: circular dots ~72% of cell width — big gaps show image
           ctx.beginPath();
-          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.44, 0, Math.PI * 2);
+          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.46, 0, Math.PI * 2);
           ctx.fill();
         } else if (dotStyle === "rounded") {
-          // rounded squares with visible gap around each
-          const rr = cellW * 0.3;
+          const rr = cellW * 0.35;
           ctx.beginPath();
-          ctx.roundRect(cx + cellW * 0.08, cy + cellH * 0.08, cellW * 0.84, cellH * 0.84, rr);
+          ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
           ctx.fill();
         } else {
-          // square: slightly inset so adjacent cells have a visible gap
-          ctx.fillRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9);
+          ctx.fillRect(cx, cy, cellW, cellH);
         }
       }
     }
