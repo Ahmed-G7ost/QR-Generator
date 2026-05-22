@@ -91,119 +91,104 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.fillRect(x, y, width, height);
   }
 
-  // =========== fgImage mode: image background + white mask on empty cells ===========
+  // =========== fgImage mode: image as full visible background, dots colored from image ===========
   if (fgImage) {
-    // 1. Draw the image stretched to fill the QR area
+    // Helper: darken or lighten a color to ensure contrast against the sampled background
+    const contrastColor = (r, g, b) => {
+      // Perceived luminance (ITU-R BT.709)
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (lum > 128) {
+        // Background is light → darken the dot significantly
+        return `rgb(${Math.round(r * 0.18)},${Math.round(g * 0.18)},${Math.round(b * 0.18)})`;
+      } else {
+        // Background is dark → lighten the dot significantly  
+        return `rgb(${Math.round(255 - (255 - r) * 0.18)},${Math.round(255 - (255 - g) * 0.18)},${Math.round(255 - (255 - b) * 0.18)})`;
+      }
+    };
+
+    // 1. Downsample the image to one pixel per QR cell — used for dot coloring
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = total;
+    sampleCanvas.height = total;
+    const sampleCtx = sampleCanvas.getContext("2d");
+    sampleCtx.imageSmoothingEnabled = true;
+    sampleCtx.drawImage(fgImage, 0, 0, total, total);
+    const sampled = sampleCtx.getImageData(0, 0, total, total).data;
+
+    // 2. Draw the full image as background — completely visible, no masking
     ctx.drawImage(fgImage, x, y, width, height);
 
-    // 2. Paint bgColor over every cell that is NOT a module (erase non-QR areas)
-    ctx.fillStyle = bgColor;
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        if (!modules.get(r, c)) {
-          const cx = x + (c + margin) * cellW;
-          const cy = y + (r + margin) * cellH;
-          ctx.fillRect(cx, cy, cellW, cellH);
-        }
-      }
-    }
-    // 3. Paint bgColor over the quiet-zone margins
-    ctx.fillStyle = bgColor;
-    // Top margin
-    ctx.fillRect(x, y, width, margin * cellH);
-    // Bottom margin
-    ctx.fillRect(x, y + height - margin * cellH, width, margin * cellH);
-    // Left margin
-    ctx.fillRect(x, y, margin * cellW, height);
-    // Right margin
-    ctx.fillRect(x + width - margin * cellW, y, margin * cellW, height);
-
-    // 4. Re-draw finder patterns clearly on top (critical for readability)
+    // 3. Draw finder patterns (eyes) on top of the image with strong contrast
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
       const fw = cellW * 7;
       const fh = cellH * 7;
 
-      // Clear finder area first, then redraw with image-sampled color
-      // Sample dominant color from the image at the finder position
-      const tmpC2 = document.createElement("canvas");
-      tmpC2.width = 1; tmpC2.height = 1;
-      const tmpCtx2 = tmpC2.getContext("2d");
-      const srcX = (fp.c + margin) / total;
-      const srcY = (fp.r + margin) / total;
-      tmpCtx2.drawImage(fgImage, srcX * fgImage.naturalWidth, srcY * fgImage.naturalHeight, fgImage.naturalWidth * 7 / total, fgImage.naturalHeight * 7 / total, 0, 0, 1, 1);
-      const pixel = tmpCtx2.getImageData(0, 0, 1, 1).data;
-      const sampledColor = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
-
-      const finderColor = eyeColor || sampledColor;
+      // Sample the average color in the finder area from the downsampled image
+      let rSum = 0, gSum = 0, bSum = 0, count = 0;
+      for (let dr = 0; dr < 7; dr++) {
+        for (let dc = 0; dc < 7; dc++) {
+          const si = ((fp.r + margin + dr) * total + (fp.c + margin + dc)) * 4;
+          rSum += sampled[si]; gSum += sampled[si + 1]; bSum += sampled[si + 2];
+          count++;
+        }
+      }
+      const avgR = rSum / count, avgG = gSum / count, avgB = bSum / count;
+      const finderDotColor = eyeColor || contrastColor(avgR, avgG, avgB);
+      // Background of finder rings is a semi-transparent version of the opposite tone
+      const lum = 0.2126 * avgR + 0.7152 * avgG + 0.0722 * avgB;
+      const finderBg = lum > 128 ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.92)";
 
       if (dotStyle === "dots") {
-        ctx.fillStyle = finderColor;
+        ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = bgColor;
+        ctx.fillStyle = finderBg;
         ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2 - cellW, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = finderColor;
+        ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, cellW * 1.5, 0, Math.PI * 2); ctx.fill();
       } else if (dotStyle === "rounded") {
         const rr = cellW * 0.8;
-        ctx.fillStyle = finderColor;
+        ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, rr); ctx.fill();
-        ctx.fillStyle = bgColor;
+        ctx.fillStyle = finderBg;
         ctx.beginPath(); ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, rr * 0.6); ctx.fill();
-        ctx.fillStyle = finderColor;
+        ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, rr * 0.4); ctx.fill();
       } else {
-        ctx.fillStyle = finderColor;
+        ctx.fillStyle = finderDotColor;
         ctx.fillRect(fx, fy, fw, fh);
-        ctx.fillStyle = bgColor;
+        ctx.fillStyle = finderBg;
         ctx.fillRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2);
-        ctx.fillStyle = finderColor;
+        ctx.fillStyle = finderDotColor;
         ctx.fillRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4);
       }
     }
 
-    // 5. Apply per-cell solid sampled color for every data module — including
-    //    "square" style. This is critical for readability: sampling the image
-    //    once per cell keeps the QR pattern crisp instead of bleeding fine
-    //    image detail across multiple modules (which made the QR shape
-    //    unreadable and chaotic).
-    {
-      // Downsample the image to one pixel per QR cell in a single pass.
-      const sampleCanvas = document.createElement("canvas");
-      sampleCanvas.width = total;
-      sampleCanvas.height = total;
-      const sampleCtx = sampleCanvas.getContext("2d");
-      sampleCtx.imageSmoothingEnabled = true;
-      sampleCtx.drawImage(fgImage, 0, 0, total, total);
-      const sampled = sampleCtx.getImageData(0, 0, total, total).data;
+    // 4. Draw data module dots — each dot is colored from sampled image pixel
+    //    with high contrast to ensure the QR pattern is readable over the image.
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (!modules.get(r, c)) continue;
+        if (isFinderCell(r, c)) continue;
+        const cx = x + (c + margin) * cellW;
+        const cy = y + (r + margin) * cellH;
 
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
-          if (!modules.get(r, c)) continue;
-          if (isFinderCell(r, c)) continue;
-          const cx = x + (c + margin) * cellW;
-          const cy = y + (r + margin) * cellH;
-          // Clear the cell back to bg first (erase the underlying full image)
-          ctx.fillStyle = bgColor;
+        const sIdx = ((r + margin) * total + (c + margin)) * 4;
+        const sr = sampled[sIdx], sg = sampled[sIdx + 1], sb = sampled[sIdx + 2];
+        ctx.fillStyle = contrastColor(sr, sg, sb);
+
+        if (dotStyle === "dots") {
+          ctx.beginPath();
+          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.46, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (dotStyle === "rounded") {
+          const rr = cellW * 0.35;
+          ctx.beginPath();
+          ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
+          ctx.fill();
+        } else {
           ctx.fillRect(cx, cy, cellW, cellH);
-
-          const sIdx = ((r + margin) * total + (c + margin)) * 4;
-          ctx.fillStyle = `rgb(${sampled[sIdx]},${sampled[sIdx + 1]},${sampled[sIdx + 2]})`;
-
-          if (dotStyle === "dots") {
-            ctx.beginPath();
-            ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.46, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (dotStyle === "rounded") {
-            const rr = cellW * 0.35;
-            ctx.beginPath();
-            ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
-            ctx.fill();
-          } else {
-            // square — fill the full cell so the QR pattern is crisp & scannable
-            ctx.fillRect(cx, cy, cellW, cellH);
-          }
         }
       }
     }

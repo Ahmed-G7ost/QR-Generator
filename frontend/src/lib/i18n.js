@@ -156,7 +156,7 @@ export const translations = {
     qrRemoveLogo: "Remove",
     qrFgImage: "Image Fill",
     qrFgImageUpload: "Upload Image",
-    qrFgImageHint: "Upload an image to color QR dots with its colors",
+    qrFgImageHint: "The image becomes the full background; dots are colored with high contrast from image colors",
   },
   ar: {
     dir: "rtl",
@@ -315,6 +315,6 @@ export const translations = {
     qrRemoveLogo: "حذف",
     qrFgImage: "تلوين بصورة",
     qrFgImageUpload: "رفع صورة",
-    qrFgImageHint: "ارفع صورة ليتم تلوين نقاط QR بألوانها",
+    qrFgImageHint: "الصورة تصبح خلفية كاملة، والنقاط تأخذ ألوانها من الصورة بتباين عالٍ لضمان القراءة",
   },
 };
