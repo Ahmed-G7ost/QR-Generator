@@ -116,11 +116,8 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.drawImage(fgImage, x, y, width, height);
     ctx.restore();
 
-    // --- Step 2: Draw finder patterns (eyes) — always circular (PAY-style)
-    //     No ugly white background rect — clean circles float over the image
-    const finderDotColor = eyeColor || fgColor;
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = cellW * 1.5;
+    // --- Step 2: Draw finder patterns (eyes) — always black/white for max contrast
+    ctx.shadowBlur = 0;
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
@@ -132,43 +129,46 @@ export function drawStyledQr(ctx, qrData, opts) {
       const ringThick = cellW * 1.0;
       const innerR = outerR - ringThick * 2.0;
 
-      // White backing behind each finder pattern for high contrast
-      ctx.fillStyle = bgColor;
+      // White backing for clean contrast
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath(); ctx.arc(ecx, ecy, outerR + cellW * 0.3, 0, Math.PI * 2); ctx.fill();
 
-      // Outer filled circle
-      ctx.fillStyle = finderDotColor;
+      // Outer black ring
+      ctx.fillStyle = "#000000";
       ctx.beginPath(); ctx.arc(ecx, ecy, outerR, 0, Math.PI * 2); ctx.fill();
-      // White/bg gap ring
-      ctx.fillStyle = bgColor;
+      // White gap
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath(); ctx.arc(ecx, ecy, outerR - ringThick, 0, Math.PI * 2); ctx.fill();
-      // Inner filled dot
-      ctx.fillStyle = finderDotColor;
+      // Inner black dot
+      ctx.fillStyle = "#000000";
       ctx.beginPath(); ctx.arc(ecx, ecy, innerR, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
-    // --- Step 3: Draw every data module dot in solid fgColor on top of the image
-    //     Size 0.44 = sweet spot: scannable + image visible in gaps
-    //     Shadow added so dark dots pop against colorful/bright image areas
-    ctx.shadowColor = fgColor === "#000000" || fgColor === "#000" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = cellW * 0.8;
-    ctx.fillStyle = fgColor;
+    // --- Step 3: Draw every data module as black+white dual dots (PAY-style)
+    //     White outer ring first, then black inner dot on top.
+    //     Guarantees readability on ANY background color.
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (!modules.get(r, c)) continue;
         if (isFinderCell(r, c)) continue;
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
+        const dotCx = cx + cellW / 2;
+        const dotCy = cy + cellH / 2;
 
+        // White halo — cuts through any bg color
+        ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.5, 0, Math.PI * 2);
+        ctx.arc(dotCx, dotCy, cellW * 0.48, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Black core — always high contrast over white halo
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.arc(dotCx, dotCy, cellW * 0.30, 0, Math.PI * 2);
         ctx.fill();
       }
     }
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
   } else {
     // =========== Normal mode (solid / gradient) ===========
