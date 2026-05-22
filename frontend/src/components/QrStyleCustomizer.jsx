@@ -119,6 +119,8 @@ export function drawStyledQr(ctx, qrData, opts) {
     // --- Step 2: Draw finder patterns (eyes) — always circular (PAY-style)
     //     No ugly white background rect — clean circles float over the image
     const finderDotColor = eyeColor || fgColor;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = cellW * 1.5;
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
@@ -140,9 +142,14 @@ export function drawStyledQr(ctx, qrData, opts) {
       ctx.fillStyle = finderDotColor;
       ctx.beginPath(); ctx.arc(ecx, ecy, innerR, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
 
     // --- Step 3: Draw every data module dot in solid fgColor on top of the image
-    //     Small dots (like PAY reference) so image shows through clearly between them
+    //     Size 0.44 = sweet spot: scannable + image visible in gaps
+    //     Shadow added so dark dots pop against colorful/bright image areas
+    ctx.shadowColor = fgColor === "#000000" || fgColor === "#000" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = cellW * 0.8;
     ctx.fillStyle = fgColor;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
@@ -151,12 +158,13 @@ export function drawStyledQr(ctx, qrData, opts) {
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
 
-        // Always draw as small circles when fgImage is active — matches PAY style
         ctx.beginPath();
-        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.36, 0, Math.PI * 2);
+        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.44, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
 
   } else {
     // =========== Normal mode (solid / gradient) ===========
