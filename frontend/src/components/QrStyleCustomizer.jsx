@@ -91,59 +91,82 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.fillRect(x, y, width, height);
   }
 
-  // =========== fgImage mode: image as full visible background, dots colored from image ===========
+  // =========== fgImage mode ===========
+  // Strategy (matches the reference image):
+  //   • bgColor fills the entire QR area as a clean solid background
+  //   • Every QR dot gets its exact color sampled from the image at the
+  //     corresponding position — no contrast inversion, just the raw pixel color
+  //   • Finder patterns (eyes) are drawn with the sampled color from the image
+  //     with a white ring so they remain recognisable over any background
   if (fgImage) {
-    // Helper: darken or lighten a color to ensure contrast against the sampled background
-    const contrastColor = (r, g, b) => {
-      // Perceived luminance (ITU-R BT.709)
-      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      if (lum > 128) {
-        // Background is light → darken the dot significantly
-        return `rgb(${Math.round(r * 0.18)},${Math.round(g * 0.18)},${Math.round(b * 0.18)})`;
-      } else {
-        // Background is dark → lighten the dot significantly  
-        return `rgb(${Math.round(255 - (255 - r) * 0.18)},${Math.round(255 - (255 - g) * 0.18)},${Math.round(255 - (255 - b) * 0.18)})`;
+    // --- Step 1: Downsample the image to QR-grid resolution (one pixel per cell)
+    //     High-quality area-average gives the dominant color for each cell.
+    const sampleSize = total * 4; // 4× oversampling then average
+    const hiCanvas = document.createElement("canvas");
+    hiCanvas.width = total * 4;
+    hiCanvas.height = total * 4;
+    const hiCtx = hiCanvas.getContext("2d");
+    hiCtx.imageSmoothingEnabled = true;
+    hiCtx.imageSmoothingQuality = "high";
+    hiCtx.drawImage(fgImage, 0, 0, total * 4, total * 4);
+    const hiData = hiCtx.getImageData(0, 0, total * 4, total * 4).data;
+
+    // Build a (total × total) averaged color table
+    const cellColors = new Uint8Array(total * total * 3);
+    for (let row = 0; row < total; row++) {
+      for (let col = 0; col < total; col++) {
+        let rS = 0, gS = 0, bS = 0;
+        for (let dy = 0; dy < 4; dy++) {
+          for (let dx = 0; dx < 4; dx++) {
+            const idx = ((row * 4 + dy) * total * 4 + (col * 4 + dx)) * 4;
+            rS += hiData[idx]; gS += hiData[idx + 1]; bS += hiData[idx + 2];
+          }
+        }
+        const base = (row * total + col) * 3;
+        cellColors[base]     = Math.round(rS / 16);
+        cellColors[base + 1] = Math.round(gS / 16);
+        cellColors[base + 2] = Math.round(bS / 16);
       }
+    }
+
+    // Helper: get sampled color string for a grid cell (row, col in 0..total-1)
+    const cellColor = (row, col) => {
+      const base = (row * total + col) * 3;
+      return `rgb(${cellColors[base]},${cellColors[base + 1]},${cellColors[base + 2]})`;
     };
 
-    // 1. Downsample the image to one pixel per QR cell — used for dot coloring
-    const sampleCanvas = document.createElement("canvas");
-    sampleCanvas.width = total;
-    sampleCanvas.height = total;
-    const sampleCtx = sampleCanvas.getContext("2d");
-    sampleCtx.imageSmoothingEnabled = true;
-    sampleCtx.drawImage(fgImage, 0, 0, total, total);
-    const sampled = sampleCtx.getImageData(0, 0, total, total).data;
+    // Helper: get average sampled color over a rectangular region of the grid
+    const regionColor = (startRow, startCol, rows, cols) => {
+      let rS = 0, gS = 0, bS = 0, n = 0;
+      for (let dr = 0; dr < rows; dr++) {
+        for (let dc = 0; dc < cols; dc++) {
+          const base = ((startRow + dr) * total + (startCol + dc)) * 3;
+          rS += cellColors[base]; gS += cellColors[base + 1]; bS += cellColors[base + 2];
+          n++;
+        }
+      }
+      return { r: Math.round(rS / n), g: Math.round(gS / n), b: Math.round(bS / n) };
+    };
 
-    // 2. Draw the full image as background — completely visible, no masking
-    ctx.drawImage(fgImage, x, y, width, height);
+    // --- Step 2: Fill the whole QR area with bgColor (clean, solid background)
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x, y, width, height);
 
-    // 3. Draw finder patterns (eyes) on top of the image with strong contrast
+    // --- Step 3: Draw finder patterns (eyes) with image-sampled color + white ring
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
       const fw = cellW * 7;
       const fh = cellH * 7;
 
-      // Sample the average color in the finder area from the downsampled image
-      let rSum = 0, gSum = 0, bSum = 0, count = 0;
-      for (let dr = 0; dr < 7; dr++) {
-        for (let dc = 0; dc < 7; dc++) {
-          const si = ((fp.r + margin + dr) * total + (fp.c + margin + dc)) * 4;
-          rSum += sampled[si]; gSum += sampled[si + 1]; bSum += sampled[si + 2];
-          count++;
-        }
-      }
-      const avgR = rSum / count, avgG = gSum / count, avgB = bSum / count;
-      const finderDotColor = eyeColor || contrastColor(avgR, avgG, avgB);
-      // Background of finder rings is a semi-transparent version of the opposite tone
-      const lum = 0.2126 * avgR + 0.7152 * avgG + 0.0722 * avgB;
-      const finderBg = lum > 128 ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.92)";
+      // Average color of the 7×7 finder region in the image
+      const { r: avgR, g: avgG, b: avgB } = regionColor(fp.r + margin, fp.c + margin, 7, 7);
+      const finderDotColor = eyeColor || `rgb(${avgR},${avgG},${avgB})`;
 
       if (dotStyle === "dots") {
         ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = finderBg;
+        ctx.fillStyle = bgColor;
         ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2 - cellW, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, cellW * 1.5, 0, Math.PI * 2); ctx.fill();
@@ -151,22 +174,21 @@ export function drawStyledQr(ctx, qrData, opts) {
         const rr = cellW * 0.8;
         ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, rr); ctx.fill();
-        ctx.fillStyle = finderBg;
+        ctx.fillStyle = bgColor;
         ctx.beginPath(); ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, rr * 0.6); ctx.fill();
         ctx.fillStyle = finderDotColor;
         ctx.beginPath(); ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, rr * 0.4); ctx.fill();
       } else {
         ctx.fillStyle = finderDotColor;
         ctx.fillRect(fx, fy, fw, fh);
-        ctx.fillStyle = finderBg;
+        ctx.fillStyle = bgColor;
         ctx.fillRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2);
         ctx.fillStyle = finderDotColor;
         ctx.fillRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4);
       }
     }
 
-    // 4. Draw data module dots — each dot is colored from sampled image pixel
-    //    with high contrast to ensure the QR pattern is readable over the image.
+    // --- Step 4: Draw every data module dot with its exact sampled image color
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (!modules.get(r, c)) continue;
@@ -174,9 +196,7 @@ export function drawStyledQr(ctx, qrData, opts) {
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
 
-        const sIdx = ((r + margin) * total + (c + margin)) * 4;
-        const sr = sampled[sIdx], sg = sampled[sIdx + 1], sb = sampled[sIdx + 2];
-        ctx.fillStyle = contrastColor(sr, sg, sb);
+        ctx.fillStyle = cellColor(r + margin, c + margin);
 
         if (dotStyle === "dots") {
           ctx.beginPath();
