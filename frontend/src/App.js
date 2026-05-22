@@ -384,7 +384,7 @@ export default function App() {
         <style>{`@media (min-width: 1024px) { :root { --sidebar-offset: ${sidebarWidth}px; } }`}</style>
 
         {/* Mobile top bar */}
-        <header className="lg:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#08080f]/90 backdrop-blur-xl border-b border-white/[0.07]">
+        <header className="lg:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#08080f] border-b border-white/[0.07] text-white">
           <button
             onClick={() => setDrawerOpen(true)}
             className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white/70 hover:text-white transition"
