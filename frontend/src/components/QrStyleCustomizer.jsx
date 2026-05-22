@@ -47,7 +47,9 @@ export function drawStyledQr(ctx, qrData, opts) {
   } = opts;
 
   const hasLogo = !!logoImg;
-  const safeLogoSize = hasLogo ? Math.min(logoSize, 25) : 0;
+  // Cap at 22% to stay well within Error Correction H recovery budget (~30%).
+  // Anything larger + the clear ring around the logo starts breaking scanners.
+  const safeLogoSize = hasLogo ? Math.min(logoSize, 22) : 0;
 
   const hasFgImage = !!fgImage;
   const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: (hasLogo || hasFgImage) ? "H" : "M" });
@@ -275,25 +277,36 @@ export function drawStyledQr(ctx, qrData, opts) {
     }
   }
 
-  // Logo overlay — clear a generous area + draw logo
+  // Logo overlay — circular clear zone + circular logo (professional look)
+  // We always render the logo as a perfect circle, regardless of dotStyle,
+  // with a generous white ring around it so scanners still lock in.
   if (hasLogo) {
     const logoDim = width * (safeLogoSize / 100);
-    const lx = x + (width - logoDim) / 2;
-    const ly = y + (height - logoDim) / 2;
-    // Generous padding (20% of logo) to clear enough QR modules
-    const pad = logoDim * 0.2;
+    const cxCenter = x + width / 2;
+    const cyCenter = y + height / 2;
+    // Clear circular zone (slightly larger than logo) — covers underlying
+    // QR modules / background image so the camera sees a clean disk.
+    const clearRadius = logoDim / 2 + logoDim * 0.20;
     ctx.fillStyle = bgColor;
-    if (dotStyle === "dots") {
-      ctx.beginPath();
-      ctx.arc(lx + logoDim / 2, ly + logoDim / 2, logoDim / 2 + pad, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      const rr = pad * 0.6;
-      ctx.beginPath();
-      ctx.roundRect(lx - pad, ly - pad, logoDim + pad * 2, logoDim + pad * 2, rr);
-      ctx.fill();
-    }
-    ctx.drawImage(logoImg, lx, ly, logoDim, logoDim);
+    ctx.beginPath();
+    ctx.arc(cxCenter, cyCenter, clearRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Thin outer ring for a more polished, "branded" look
+    const ringW = Math.max(1, width * 0.005);
+    ctx.strokeStyle = (eyeColor || fgColor);
+    ctx.lineWidth = ringW;
+    ctx.beginPath();
+    ctx.arc(cxCenter, cyCenter, clearRadius - ringW / 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Clip logo to a circle and draw it inside the cleared zone
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cxCenter, cyCenter, logoDim / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(logoImg, cxCenter - logoDim / 2, cyCenter - logoDim / 2, logoDim, logoDim);
+    ctx.restore();
   }
 
   ctx.restore();
@@ -621,7 +634,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
               )}
             </div>
             {config.qr_logo && (
-              <MiniSlider label={t.qrLogoSize} value={config.qr_logo_size} onChange={(v) => updateConfig("qr_logo_size", v)} min={5} max={25} testId="qr-logo-size" />
+              <MiniSlider label={t.qrLogoSize} value={config.qr_logo_size} onChange={(v) => updateConfig("qr_logo_size", v)} min={5} max={22} testId="qr-logo-size" />
             )}
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
               data-testid="qr-logo-input" onChange={handleLogoUpload} />
