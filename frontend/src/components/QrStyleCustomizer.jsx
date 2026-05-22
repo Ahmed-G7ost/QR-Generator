@@ -49,7 +49,8 @@ export function drawStyledQr(ctx, qrData, opts) {
   const hasLogo = !!logoImg;
   const safeLogoSize = hasLogo ? Math.min(logoSize, 25) : 0;
 
-  const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: hasLogo ? "H" : "M" });
+  const hasFgImage = !!fgImage;
+  const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: (hasLogo || hasFgImage) ? "H" : "M" });
   const modules = qr.modules;
   const size = modules.size;
   const margin = 1;
@@ -115,45 +116,33 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.drawImage(fgImage, x, y, width, height);
     ctx.restore();
 
-    // --- Step 2: Draw finder patterns (eyes) in solid color — clear & high-contrast
+    // --- Step 2: Draw finder patterns (eyes) — always circular (PAY-style)
+    //     No ugly white background rect — clean circles float over the image
     const finderDotColor = eyeColor || fgColor;
-    // White halo behind each eye to ensure it's readable over any background
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
       const fw = cellW * 7;
       const fh = cellH * 7;
+      const ecx = fx + fw / 2;
+      const ecy = fy + fh / 2;
+      const outerR = fw / 2;
+      const ringThick = cellW * 1.2;
+      const innerR = outerR - ringThick * 2.2;
 
-      // White halo padding
+      // Outer filled circle
+      ctx.fillStyle = finderDotColor;
+      ctx.beginPath(); ctx.arc(ecx, ecy, outerR, 0, Math.PI * 2); ctx.fill();
+      // White/bg gap ring
       ctx.fillStyle = bgColor;
-      ctx.fillRect(fx - cellW * 0.5, fy - cellH * 0.5, fw + cellW, fh + cellH);
-
-      if (dotStyle === "dots") {
-        ctx.fillStyle = finderDotColor;
-        ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = bgColor;
-        ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2 - cellW, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = finderDotColor;
-        ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, cellW * 1.5, 0, Math.PI * 2); ctx.fill();
-      } else if (dotStyle === "rounded") {
-        const rr = cellW * 0.8;
-        ctx.fillStyle = finderDotColor;
-        ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, rr); ctx.fill();
-        ctx.fillStyle = bgColor;
-        ctx.beginPath(); ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, rr * 0.6); ctx.fill();
-        ctx.fillStyle = finderDotColor;
-        ctx.beginPath(); ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, rr * 0.4); ctx.fill();
-      } else {
-        ctx.fillStyle = finderDotColor;
-        ctx.fillRect(fx, fy, fw, fh);
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2);
-        ctx.fillStyle = finderDotColor;
-        ctx.fillRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4);
-      }
+      ctx.beginPath(); ctx.arc(ecx, ecy, outerR - ringThick, 0, Math.PI * 2); ctx.fill();
+      // Inner filled dot
+      ctx.fillStyle = finderDotColor;
+      ctx.beginPath(); ctx.arc(ecx, ecy, innerR, 0, Math.PI * 2); ctx.fill();
     }
 
     // --- Step 3: Draw every data module dot in solid fgColor on top of the image
+    //     Slightly larger dots for strong visibility against the image background
     ctx.fillStyle = fgColor;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
@@ -164,12 +153,12 @@ export function drawStyledQr(ctx, qrData, opts) {
 
         if (dotStyle === "dots") {
           ctx.beginPath();
-          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.46, 0, Math.PI * 2);
+          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.48, 0, Math.PI * 2);
           ctx.fill();
         } else if (dotStyle === "rounded") {
-          const rr = cellW * 0.35;
+          const rr = cellW * 0.4;
           ctx.beginPath();
-          ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
+          ctx.roundRect(cx + cellW * 0.04, cy + cellH * 0.04, cellW * 0.92, cellH * 0.92, rr);
           ctx.fill();
         } else {
           ctx.fillRect(cx, cy, cellW, cellH);
