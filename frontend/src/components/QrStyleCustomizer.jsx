@@ -53,7 +53,7 @@ export function drawStyledQr(ctx, qrData, opts) {
   const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: (hasLogo || hasFgImage) ? "H" : "M" });
   const modules = qr.modules;
   const size = modules.size;
-  const margin = 1;
+  const margin = 4; // QR standard requires 4-module quiet zone for reliable scanning
   const total = size + margin * 2;
   const cellW = width / total;
   const cellH = height / total;
@@ -129,8 +129,12 @@ export function drawStyledQr(ctx, qrData, opts) {
       const ecx = fx + fw / 2;
       const ecy = fy + fh / 2;
       const outerR = fw / 2;
-      const ringThick = cellW * 1.2;
-      const innerR = outerR - ringThick * 2.2;
+      const ringThick = cellW * 1.0;
+      const innerR = outerR - ringThick * 2.0;
+
+      // White backing behind each finder pattern for high contrast
+      ctx.fillStyle = bgColor;
+      ctx.beginPath(); ctx.arc(ecx, ecy, outerR + cellW * 0.3, 0, Math.PI * 2); ctx.fill();
 
       // Outer filled circle
       ctx.fillStyle = finderDotColor;
@@ -159,7 +163,7 @@ export function drawStyledQr(ctx, qrData, opts) {
         const cy = y + (r + margin) * cellH;
 
         ctx.beginPath();
-        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.44, 0, Math.PI * 2);
+        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -223,7 +227,7 @@ export function drawStyledQr(ctx, qrData, opts) {
         const cy = y + (r + margin) * cellH;
         if (dotStyle === "dots") {
           ctx.beginPath();
-          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.42, 0, Math.PI * 2);
+          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.48, 0, Math.PI * 2);
           ctx.fill();
         } else if (dotStyle === "rounded") {
           const rr = cellW * 0.35;
@@ -283,8 +287,8 @@ export function drawStyledQr(ctx, qrData, opts) {
  * Returns { bytes, isJpeg } — JPEG for styled QR (small), PNG for simple.
  */
 export async function generateStyledQrPng(text, width, qrConfig, logoImgElement, fgImgElement) {
-  // Use 128px for PDF — QR is perfectly readable at this size
-  const renderSize = 128;
+  // Use 256px for PDF — ensures reliable scanning, especially with styled dots
+  const renderSize = 256;
   const canvas = typeof OffscreenCanvas !== "undefined"
     ? new OffscreenCanvas(renderSize, renderSize)
     : document.createElement("canvas");
