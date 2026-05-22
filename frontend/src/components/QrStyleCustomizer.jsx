@@ -53,7 +53,7 @@ export function drawStyledQr(ctx, qrData, opts) {
   const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: (hasLogo || hasFgImage) ? "H" : "M" });
   const modules = qr.modules;
   const size = modules.size;
-  const margin = 1;
+  const margin = 4; // QR standard requires 4-module quiet zone for reliable scanning
   const total = size + margin * 2;
   const cellW = width / total;
   const cellH = height / total;
@@ -116,11 +116,8 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.drawImage(fgImage, x, y, width, height);
     ctx.restore();
 
-    // --- Step 2: Draw finder patterns (eyes) — always circular (PAY-style)
-    //     No ugly white background rect — clean circles float over the image
-    const finderDotColor = eyeColor || fgColor;
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = cellW * 1.5;
+    // --- Step 2: Draw finder patterns (eyes) — always black/white for max contrast
+    ctx.shadowBlur = 0;
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
@@ -129,42 +126,50 @@ export function drawStyledQr(ctx, qrData, opts) {
       const ecx = fx + fw / 2;
       const ecy = fy + fh / 2;
       const outerR = fw / 2;
-      const ringThick = cellW * 1.2;
-      const innerR = outerR - ringThick * 2.2;
+      const ringThick = cellW * 1.0;
+      const innerR = outerR - ringThick * 2.0;
 
-      // Outer filled circle
-      ctx.fillStyle = finderDotColor;
+      // White backing for clean contrast
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(ecx, ecy, outerR + cellW * 0.3, 0, Math.PI * 2); ctx.fill();
+
+      // Outer black ring
+      ctx.fillStyle = "#000000";
       ctx.beginPath(); ctx.arc(ecx, ecy, outerR, 0, Math.PI * 2); ctx.fill();
-      // White/bg gap ring
-      ctx.fillStyle = bgColor;
+      // White gap
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath(); ctx.arc(ecx, ecy, outerR - ringThick, 0, Math.PI * 2); ctx.fill();
-      // Inner filled dot
-      ctx.fillStyle = finderDotColor;
+      // Inner black dot
+      ctx.fillStyle = "#000000";
       ctx.beginPath(); ctx.arc(ecx, ecy, innerR, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
-    // --- Step 3: Draw every data module dot in solid fgColor on top of the image
-    //     Size 0.44 = sweet spot: scannable + image visible in gaps
-    //     Shadow added so dark dots pop against colorful/bright image areas
-    ctx.shadowColor = fgColor === "#000000" || fgColor === "#000" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = cellW * 0.8;
-    ctx.fillStyle = fgColor;
+    // --- Step 3: Draw PAY-style grid overlay
+    //     EVERY cell gets a white square (quiet gap visible over the colored image)
+    //     Active modules (=1) get an additional black square on top
+    //     Result: black+white checkerboard pattern over the colored background — exactly like the reference image
+
+    const dotPad = cellW * 0.12; // padding inside each cell for the white square
+    const dotInner = cellW * 0.55; // size of the black active-module square
+
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (!modules.get(r, c)) continue;
         if (isFinderCell(r, c)) continue;
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
 
-        ctx.beginPath();
-        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.44, 0, Math.PI * 2);
-        ctx.fill();
+        // White square on every cell — image color shows around the edges
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(cx + dotPad, cy + dotPad, cellW - dotPad * 2, cellH - dotPad * 2);
+
+        // Black square only on active (=1) modules
+        if (modules.get(r, c)) {
+          const innerPad = (cellW - dotInner) / 2;
+          ctx.fillStyle = "#000000";
+          ctx.fillRect(cx + innerPad, cy + innerPad, dotInner, dotInner);
+        }
       }
     }
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
   } else {
     // =========== Normal mode (solid / gradient) ===========
@@ -223,7 +228,7 @@ export function drawStyledQr(ctx, qrData, opts) {
         const cy = y + (r + margin) * cellH;
         if (dotStyle === "dots") {
           ctx.beginPath();
-          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.42, 0, Math.PI * 2);
+          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.48, 0, Math.PI * 2);
           ctx.fill();
         } else if (dotStyle === "rounded") {
           const rr = cellW * 0.35;
@@ -283,8 +288,8 @@ export function drawStyledQr(ctx, qrData, opts) {
  * Returns { bytes, isJpeg } — JPEG for styled QR (small), PNG for simple.
  */
 export async function generateStyledQrPng(text, width, qrConfig, logoImgElement, fgImgElement) {
-  // Use 128px for PDF — QR is perfectly readable at this size
-  const renderSize = 128;
+  // Use 256px for PDF — ensures reliable scanning, especially with styled dots
+  const renderSize = 256;
   const canvas = typeof OffscreenCanvas !== "undefined"
     ? new OffscreenCanvas(renderSize, renderSize)
     : document.createElement("canvas");
