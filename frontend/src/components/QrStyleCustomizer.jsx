@@ -151,19 +151,20 @@ export function drawStyledQr(ctx, qrData, opts) {
       ctx.fill();
     }
 
-    // --- Step 3: Data modules — PAY-style halftone over the background.
-    //     • Dark cells: large rounded fgColor square covers the image
-    //     • Light cells: tiny rounded bgColor dot adds the contrast grid
-    //       the camera needs to align/decode reliably.
-    // PAY-style sizing: small dots so the background image stays visible.
-    const darkPad  = cellW * 0.10;          // 10% inset → ~80% fill
+    // --- Step 3: Data modules — Joval-PAY style halftone over the background.
+    //     Small, sharp square dots so the background image stays clearly
+    //     visible through the QR (camera still locks via finder patterns).
+    //     • Dark cells: small fgColor square (~45% of cell)
+    //     • Light cells: small bgColor square of the same size, providing
+    //       the alternating grid contrast required for decoding.
+    const darkPad  = cellW * 0.28;          // 28% inset → ~44% fill (small dark dots)
     const darkW    = cellW - darkPad * 2;
     const darkH    = cellH - darkPad * 2;
-    const darkR    = cellW * 0.16;
-    const lightPad = cellW * 0.32;          // 32% inset → ~36% fill (small light dots)
+    const darkR    = cellW * 0.04;          // nearly sharp corners
+    const lightPad = cellW * 0.28;          // 28% inset → ~44% fill (matching light dots)
     const lightW   = cellW - lightPad * 2;
     const lightH   = cellH - lightPad * 2;
-    const lightR   = cellW * 0.10;
+    const lightR   = cellW * 0.04;
 
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
