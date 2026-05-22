@@ -144,30 +144,29 @@ export function drawStyledQr(ctx, qrData, opts) {
       ctx.beginPath(); ctx.arc(ecx, ecy, innerR, 0, Math.PI * 2); ctx.fill();
     }
 
-    // --- Step 3: Draw PAY-style grid overlay
-    //     EVERY cell gets a white square (quiet gap visible over the colored image)
-    //     Active modules (=1) get an additional black square on top
-    //     Result: black+white checkerboard pattern over the colored background — exactly like the reference image
-
-    const dotPad = cellW * 0.12; // padding inside each cell for the white square
-    const dotInner = cellW * 0.55; // size of the black active-module square
-
+    // --- Step 3: Draw every data module as black+white dual dots (PAY-style)
+    //     White outer ring first, then black inner dot on top.
+    //     Guarantees readability on ANY background color.
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
+        if (!modules.get(r, c)) continue;
         if (isFinderCell(r, c)) continue;
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
+        const dotCx = cx + cellW / 2;
+        const dotCy = cy + cellH / 2;
 
-        // White square on every cell — image color shows around the edges
+        // White halo — cuts through any bg color
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(cx + dotPad, cy + dotPad, cellW - dotPad * 2, cellH - dotPad * 2);
+        ctx.beginPath();
+        ctx.arc(dotCx, dotCy, cellW * 0.48, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Black square only on active (=1) modules
-        if (modules.get(r, c)) {
-          const innerPad = (cellW - dotInner) / 2;
-          ctx.fillStyle = "#000000";
-          ctx.fillRect(cx + innerPad, cy + innerPad, dotInner, dotInner);
-        }
+        // Black core — always high contrast over white halo
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.arc(dotCx, dotCy, cellW * 0.30, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
