@@ -92,83 +92,98 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.fillRect(x, y, width, height);
   }
 
-  // =========== fgImage mode ===========
-  // Strategy (PAY-style):
-  //   • The uploaded image is drawn as the FULL BACKGROUND of the QR area
-  //   • QR dots (data modules) are drawn on top in solid fgColor — always clear & readable
-  //   • Finder patterns (eyes) use eyeColor or fgColor — solid & high-contrast
-  //   • The image shows through the transparent gaps between dots
+    // =========== fgImage mode (PAY / halftone style) ===========
+  // The trick of designs like the PAY QR: keep the background image at FULL
+  // saturation (no veil) and create contrast for the scanner using TWO dots:
+  //   • Dark module → large solid fgColor square covers the image cell
+  //   • Light module → small bgColor (white) dot sits on top of the image
+  //     This second dot is what makes the camera see a regular grid of
+  //     light/dark cells over any picture.
   if (fgImage) {
-    // --- Step 1: Draw the image as the background (fills the entire QR area)
+    // --- Step 1: Draw the image ONLY inside the QR data area (not the quiet
+    //     zone). The outer margin stays bgColor so the QR has a clean white
+    //     frame around it, exactly like a printed sticker.
+    const qrX = x + margin * cellW;
+    const qrY = y + margin * cellH;
+    const qrSize = size * cellW;
+
     ctx.save();
-    if (bgShape === "circle") {
-      ctx.beginPath();
-      ctx.arc(x + width / 2, y + height / 2, width / 2, 0, Math.PI * 2);
-      ctx.clip();
-    } else if (bgShape === "rounded") {
-      const r = width * 0.08;
-      ctx.beginPath();
-      ctx.roundRect(x, y, width, height, r);
-      ctx.clip();
-    }
+    // Clip to the QR data square only
+    ctx.beginPath();
+    ctx.rect(qrX, qrY, qrSize, qrSize);
+    ctx.clip();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(fgImage, x, y, width, height);
+    // Image is stretched to fill the data area (not the whole canvas)
+    ctx.drawImage(fgImage, qrX, qrY, qrSize, qrSize);
     ctx.restore();
 
-    // --- Step 2: Draw finder patterns (eyes) — always circular (PAY-style)
-    //     No ugly white background rect — clean circles float over the image
+    // --- Step 2: Finder patterns (eyes) — classic nested squares with a
+    //     light backing ring → cameras lock on immediately.
     const finderDotColor = eyeColor || fgColor;
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = cellW * 1.5;
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
       const fw = cellW * 7;
       const fh = cellH * 7;
-      const ecx = fx + fw / 2;
-      const ecy = fy + fh / 2;
-      const outerR = fw / 2;
-      const ringThick = cellW * 1.0;
-      const innerR = outerR - ringThick * 2.0;
 
-      // White backing behind each finder pattern for high contrast
+      // Light backing rectangle (slightly larger) for high contrast
+      const pad = cellW * 0.35;
       ctx.fillStyle = bgColor;
-      ctx.beginPath(); ctx.arc(ecx, ecy, outerR + cellW * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(fx - pad, fy - pad, fw + pad * 2, fh + pad * 2, cellW * 1.2);
+      ctx.fill();
 
-      // Outer filled circle
+      // Outer solid square
       ctx.fillStyle = finderDotColor;
-      ctx.beginPath(); ctx.arc(ecx, ecy, outerR, 0, Math.PI * 2); ctx.fill();
-      // White/bg gap ring
+      ctx.beginPath();
+      ctx.roundRect(fx, fy, fw, fh, cellW * 0.6);
+      ctx.fill();
+      // Light gap ring
       ctx.fillStyle = bgColor;
-      ctx.beginPath(); ctx.arc(ecx, ecy, outerR - ringThick, 0, Math.PI * 2); ctx.fill();
-      // Inner filled dot
+      ctx.beginPath();
+      ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, cellW * 0.5);
+      ctx.fill();
+      // Inner solid square
       ctx.fillStyle = finderDotColor;
-      ctx.beginPath(); ctx.arc(ecx, ecy, innerR, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, cellW * 0.4);
+      ctx.fill();
     }
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
-    // --- Step 3: Draw every data module dot in solid fgColor on top of the image
-    //     Size 0.44 = sweet spot: scannable + image visible in gaps
-    //     Shadow added so dark dots pop against colorful/bright image areas
-    ctx.shadowColor = fgColor === "#000000" || fgColor === "#000" ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = cellW * 0.8;
-    ctx.fillStyle = fgColor;
+    // --- Step 3: Data modules — PAY-style halftone over the background.
+    //     • Dark cells: large rounded fgColor square covers the image
+    //     • Light cells: tiny rounded bgColor dot adds the contrast grid
+    //       the camera needs to align/decode reliably.
+    const darkPad  = cellW * 0.05;          // 5% inset → ~90% fill
+    const darkW    = cellW - darkPad * 2;
+    const darkH    = cellH - darkPad * 2;
+    const darkR    = cellW * 0.18;
+    const lightPad = cellW * 0.30;          // 30% inset → ~40% fill
+    const lightW   = cellW - lightPad * 2;
+    const lightH   = cellH - lightPad * 2;
+    const lightR   = cellW * 0.14;
+
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
-        if (!modules.get(r, c)) continue;
         if (isFinderCell(r, c)) continue;
-        const cx = x + (c + margin) * cellW;
-        const cy = y + (r + margin) * cellH;
-
-        ctx.beginPath();
-        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.5, 0, Math.PI * 2);
-        ctx.fill();
+        const baseX = x + (c + margin) * cellW;
+        const baseY = y + (r + margin) * cellH;
+        if (modules.get(r, c)) {
+          // Dark module → large foreground square on top of image
+          ctx.fillStyle = fgColor;
+          ctx.beginPath();
+          ctx.roundRect(baseX + darkPad, baseY + darkPad, darkW, darkH, darkR);
+          ctx.fill();
+        } else {
+          // Light module → small bgColor highlight (the PAY-style accent)
+          ctx.fillStyle = bgColor;
+          ctx.beginPath();
+          ctx.roundRect(baseX + lightPad, baseY + lightPad, lightW, lightH, lightR);
+          ctx.fill();
+        }
       }
     }
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
 
   } else {
     // =========== Normal mode (solid / gradient) ===========
