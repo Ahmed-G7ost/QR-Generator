@@ -119,6 +119,111 @@ function CardStepper({ current, t }) {
   );
 }
 
+/* ------------------------------ Sidebar ---------------------------------- */
+function Sidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
+  return (
+    <aside
+      className="fixed top-0 bottom-0 z-20 flex flex-col py-6 px-3 border-r border-white/[0.07] bg-[#08080f]/80 backdrop-blur-xl"
+      style={{ width: 220, left: lang === "ar" ? "auto" : 0, right: lang === "ar" ? 0 : "auto" }}
+    >
+      {/* Logo */}
+      <div className="px-3 mb-8">
+        <Logo />
+      </div>
+
+      {/* Nav label */}
+      <p className="px-3 mb-2 text-[10px] tracking-[0.25em] uppercase text-white/30 font-semibold">
+        {lang === "ar" ? "الأدوات" : "Tools"}
+      </p>
+
+      {/* Nav items */}
+      <nav className="flex flex-col gap-1" data-testid="mode-switcher">
+        {/* QR Generator */}
+        <button
+          data-testid="mode-qr-btn"
+          onClick={() => setMode("qr")}
+          className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all w-full text-start ${
+            mode === "qr"
+              ? "bg-gradient-to-r from-violet-500/25 to-cyan-400/15 text-white border border-violet-400/25"
+              : "text-white/50 hover:text-white/80 hover:bg-white/[0.04] border border-transparent"
+          }`}
+        >
+          <span className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-all ${
+            mode === "qr" ? "bg-gradient-to-br from-violet-500 to-cyan-400" : "bg-white/[0.06] group-hover:bg-white/[0.1]"
+          }`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 4h3v3h-3v-3zm4-4h3v3h-3v-3zm0 7h3v-3h-3v3zm-4-7h3v3h-3v-3z"
+                fill={mode === "qr" ? "#fff" : "currentColor"} />
+            </svg>
+          </span>
+          <span className="leading-tight">{t.modeQr}</span>
+          {mode === "qr" && (
+            <span className="ms-auto h-1.5 w-1.5 rounded-full bg-cyan-400 flex-shrink-0" />
+          )}
+        </button>
+
+        {/* Card Extractor */}
+        <button
+          data-testid="mode-cards-btn"
+          onClick={() => setMode("cards")}
+          className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all w-full text-start ${
+            mode === "cards"
+              ? "bg-gradient-to-r from-violet-500/25 to-cyan-400/15 text-white border border-violet-400/25"
+              : "text-white/50 hover:text-white/80 hover:bg-white/[0.04] border border-transparent"
+          }`}
+        >
+          <span className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-all ${
+            mode === "cards" ? "bg-gradient-to-br from-violet-500 to-cyan-400" : "bg-white/[0.06] group-hover:bg-white/[0.1]"
+          }`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="2" y="5" width="20" height="14" rx="2" stroke={mode === "cards" ? "#fff" : "currentColor"} strokeWidth="1.8" />
+              <path d="M2 10h20" stroke={mode === "cards" ? "#fff" : "currentColor"} strokeWidth="1.8" />
+              <path d="M6 15h4M6 17.5h2" stroke={mode === "cards" ? "#fff" : "currentColor"} strokeWidth="1.5" strokeLinecap="round" />
+              <rect x="14" y="13" width="5" height="4" rx="0.8" fill={mode === "cards" ? "#fff" : "currentColor"} opacity="0.7" />
+            </svg>
+          </span>
+          <span className="leading-tight">{t.modeCards}</span>
+          {mode === "cards" && (
+            <span className="ms-auto h-1.5 w-1.5 rounded-full bg-cyan-400 flex-shrink-0" />
+          )}
+        </button>
+      </nav>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Bottom actions */}
+      <div className="flex flex-col gap-2 px-0">
+        <button onClick={onToggleLang} data-testid="lang-toggle"
+          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] text-white/60 hover:text-white/90 transition w-full text-start">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] flex-shrink-0">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M12 3c-2.5 3-4 5.7-4 9s1.5 6 4 9M12 3c2.5 3 4 5.7 4 9s-1.5 6-4 9M3 12h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </span>
+          {t.langToggle}
+        </button>
+
+        <button
+          onClick={onSignOut}
+          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold border border-rose-400/15 bg-rose-500/[0.06] text-rose-300/80 hover:bg-rose-500/15 hover:text-rose-200 transition w-full text-start"
+          title={lang === "ar" ? "تسجيل خروج" : "Sign Out"}
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 flex-shrink-0">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M10 17l5-5-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 12H3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </span>
+          {lang === "ar" ? "خروج" : "Sign Out"}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 /* --------------------------------- App ---------------------------------- */
 export default function App() {
   const [lang, setLang] = useState("ar");
@@ -137,6 +242,8 @@ export default function App() {
 
   const goStep = useCallback((n) => cardDispatch({ type: "SET_STEP", payload: n }), []);
 
+  const sidebarWidth = 220;
+
   if (!activated) {
     return (
       <ActivationGate
@@ -150,11 +257,11 @@ export default function App() {
   return (
     <div
       dir={t.dir}
-      className="min-h-screen relative overflow-x-clip bg-[#06060c] text-white"
+      className="min-h-screen relative bg-[#06060c] text-white"
       style={{ fontFamily: lang === "ar" ? "'Tajawal', system-ui, sans-serif" : "'IBM Plex Sans', system-ui, sans-serif" }}
     >
       {/* Background */}
-      <div className="pointer-events-none absolute inset-0">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -left-40 h-[520px] w-[520px] rounded-full bg-violet-600/30 blur-[140px]" />
         <div className="absolute top-1/3 -right-32 h-[480px] w-[480px] rounded-full bg-cyan-500/25 blur-[140px]" />
         <div className="absolute bottom-0 left-1/3 h-[420px] w-[420px] rounded-full bg-fuchsia-500/20 blur-[140px]" />
@@ -168,94 +275,76 @@ export default function App() {
         />
       </div>
 
-      {/* Nav */}
-      <header className="relative z-10 px-6 sm:px-10 pt-6">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Logo />
-          <div className="flex items-center gap-3">
-            {/* Mode switcher */}
-            <div className="flex rounded-xl overflow-hidden border border-white/15" data-testid="mode-switcher">
-              <button
-                data-testid="mode-qr-btn"
-                onClick={() => setMode("qr")}
-                className={`px-4 py-2 text-xs font-semibold transition-all ${
-                  mode === "qr" ? "bg-gradient-to-r from-violet-500/80 to-cyan-400/80 text-white" : "bg-white/[0.04] text-white/50 hover:text-white/80"
-                }`}
-              >
-                {t.modeQr}
-              </button>
-              <button
-                data-testid="mode-cards-btn"
-                onClick={() => setMode("cards")}
-                className={`px-4 py-2 text-xs font-semibold transition-all ${
-                  mode === "cards" ? "bg-gradient-to-r from-violet-500/80 to-cyan-400/80 text-white" : "bg-white/[0.04] text-white/50 hover:text-white/80"
-                }`}
-              >
-                {t.modeCards}
-              </button>
-            </div>
-            <button onClick={toggleLang} data-testid="lang-toggle"
-              className="px-4 py-2 rounded-full text-xs font-semibold border border-white/15 bg-white/[0.04] hover:bg-white/[0.08] transition">
-              {t.langToggle}
-            </button>
-            <button
-              onClick={() => { signOut(_fbAuth).catch(() => {}); setActivated(false); setCurrentUser(null); }}
-              className="px-4 py-2 rounded-full text-xs font-semibold border border-rose-400/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition"
-              title={lang === "ar" ? "تسجيل خروج" : "Sign Out"}
-            >
-              {lang === "ar" ? "خروج" : "Sign Out"}
-            </button>
+      {/* Sidebar */}
+      <Sidebar
+        mode={mode}
+        setMode={setMode}
+        t={t}
+        lang={lang}
+        onToggleLang={toggleLang}
+        onSignOut={() => { signOut(_fbAuth).catch(() => {}); setActivated(false); setCurrentUser(null); }}
+      />
+
+      {/* Page content pushed beside sidebar */}
+      <div
+        className="relative z-10 flex flex-col min-h-screen overflow-x-clip"
+        style={{ marginLeft: lang === "ar" ? 0 : sidebarWidth, marginRight: lang === "ar" ? sidebarWidth : 0 }}
+      >
+        {/* Nav (logo removed — now in sidebar) */}
+        <header className="px-6 sm:px-10 pt-6">
+          <div className="max-w-6xl mx-auto flex items-center justify-end">
+            {/* intentionally empty — controls moved to sidebar */}
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Hero */}
-      <section className="relative z-10 px-6 sm:px-10 pt-14 pb-10">
-        <div className="max-w-6xl mx-auto">
-          <span data-testid="badge-local"
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] tracking-[0.22em] uppercase text-white/60">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            {mode === "qr" ? t.badge : "Excel · CSV · PDF · JPG · PNG"}
-          </span>
-          <h1 className="mt-6 text-4xl sm:text-6xl font-bold leading-[1.05] tracking-tight max-w-4xl">
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300">
-              {mode === "qr" ? t.headline : t.cardHeadline}
+        {/* Hero */}
+        <section className="px-6 sm:px-10 pt-10 pb-10">
+          <div className="max-w-6xl mx-auto">
+            <span data-testid="badge-local"
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] tracking-[0.22em] uppercase text-white/60">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {mode === "qr" ? t.badge : "Excel · CSV · PDF · JPG · PNG"}
             </span>
-          </h1>
-          <p className="mt-5 text-base sm:text-lg text-white/60 max-w-2xl">
-            {mode === "qr" ? t.tagline : t.cardTagline}
-          </p>
-        </div>
-      </section>
+            <h1 className="mt-6 text-4xl sm:text-6xl font-bold leading-[1.05] tracking-tight max-w-4xl">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300">
+                {mode === "qr" ? t.headline : t.cardHeadline}
+              </span>
+            </h1>
+            <p className="mt-5 text-base sm:text-lg text-white/60 max-w-2xl">
+              {mode === "qr" ? t.tagline : t.cardTagline}
+            </p>
+          </div>
+        </section>
 
-      {/* Main */}
-      <main className="relative z-10 px-6 sm:px-10 pb-24">
-        <div className="max-w-6xl mx-auto">
-          {mode === "qr" ? (
-            <QrGenerator t={t} lang={lang} />
-          ) : (
-            <div>
-              <CardStepper current={cardState.step} t={t} />
-              {cardState.step === 1 && (
-                <CardUploadPhase t={t} lang={lang} state={cardState} dispatch={cardDispatch} onNext={() => goStep(2)} />
-              )}
-              {cardState.step === 2 && (
-                <CardConfigurePhase t={t} lang={lang} state={cardState} dispatch={cardDispatch} onNext={() => goStep(3)} onBack={() => goStep(1)} />
-              )}
-              {cardState.step === 3 && (
-                <CardGeneratePhase t={t} lang={lang} state={cardState} dispatch={cardDispatch} onBack={() => goStep(2)} onReset={() => cardDispatch({ type: "RESET" })} />
-              )}
-            </div>
-          )}
-        </div>
-      </main>
+        {/* Main */}
+        <main className="px-6 sm:px-10 pb-24 flex-1">
+          <div className="max-w-6xl mx-auto">
+            {mode === "qr" ? (
+              <QrGenerator t={t} lang={lang} />
+            ) : (
+              <div>
+                <CardStepper current={cardState.step} t={t} />
+                {cardState.step === 1 && (
+                  <CardUploadPhase t={t} lang={lang} state={cardState} dispatch={cardDispatch} onNext={() => goStep(2)} />
+                )}
+                {cardState.step === 2 && (
+                  <CardConfigurePhase t={t} lang={lang} state={cardState} dispatch={cardDispatch} onNext={() => goStep(3)} onBack={() => goStep(1)} />
+                )}
+                {cardState.step === 3 && (
+                  <CardGeneratePhase t={t} lang={lang} state={cardState} dispatch={cardDispatch} onBack={() => goStep(2)} onReset={() => cardDispatch({ type: "RESET" })} />
+                )}
+              </div>
+            )}
+          </div>
+        </main>
 
-      <footer className="relative z-10 px-6 sm:px-10 pb-10">
-        <div className="max-w-6xl mx-auto pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/40">
-          <span>&copy; {new Date().getFullYear()} A7D TEAM &middot; {t.allRights}</span>
-          <span>{t.poweredBy} A7D TEAM</span>
-        </div>
-      </footer>
+        <footer className="px-6 sm:px-10 pb-10">
+          <div className="max-w-6xl mx-auto pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/40">
+            <span>&copy; {new Date().getFullYear()} A7D TEAM &middot; {t.allRights}</span>
+            <span>{t.poweredBy} A7D TEAM</span>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
