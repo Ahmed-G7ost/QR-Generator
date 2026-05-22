@@ -66,7 +66,6 @@ function cardReducer(state, action) {
     case "SET_SESSION": return { ...state, sessionId: action.payload };
     case "SET_RECORDS": return { ...state, records: action.payload.records, recordsCount: action.payload.count };
     case "SET_RECORDS_FULL":
-      // Client-side mode: store full records + count.
       return {
         ...state,
         records: action.payload.records,
@@ -91,15 +90,15 @@ function CardStepper({ current, t }) {
     { key: 3, label: t.step3Label },
   ];
   return (
-    <div className="flex items-center gap-1.5 mb-8" data-testid="card-stepper">
+    <div className="flex items-center gap-1 mb-8" data-testid="card-stepper">
       {steps.map((s, idx) => {
         const done = current > s.key;
         const active = current === s.key;
         return (
           <div key={s.key} className="flex items-center flex-1 last:flex-none">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <div data-testid={`card-step-${s.key}`}
-                className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold transition-all flex-shrink-0 ${
                   done ? "bg-emerald-400/80 text-[#0d0d18]"
                   : active ? "bg-gradient-to-r from-violet-500 to-cyan-400 text-white"
                   : "bg-white/10 text-white/40"
@@ -107,10 +106,10 @@ function CardStepper({ current, t }) {
               >
                 {done ? "✓" : s.key}
               </div>
-              <span className={`text-sm font-semibold whitespace-nowrap ${active ? "text-white" : done ? "text-emerald-300/80" : "text-white/40"}`}>{s.label}</span>
+              <span className={`text-xs sm:text-sm font-semibold whitespace-nowrap ${active ? "text-white" : done ? "text-emerald-300/80" : "text-white/40"}`}>{s.label}</span>
             </div>
             {idx < steps.length - 1 && (
-              <div className={`flex-1 h-px mx-3 ${done ? "bg-emerald-400/40" : "bg-white/10"}`} />
+              <div className={`flex-1 h-px mx-2 sm:mx-3 ${done ? "bg-emerald-400/40" : "bg-white/10"}`} />
             )}
           </div>
         );
@@ -119,13 +118,11 @@ function CardStepper({ current, t }) {
   );
 }
 
-/* ------------------------------ Sidebar ---------------------------------- */
-function Sidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
+/* ----------------------------- Sidebar Nav Items -------------------------- */
+function SidebarContent({ mode, setMode, t, lang, onSignOut, onToggleLang, onClose }) {
+  const handleNav = (m) => { setMode(m); onClose && onClose(); };
   return (
-    <aside
-      className="fixed top-0 bottom-0 z-20 flex flex-col py-6 px-3 border-r border-white/[0.07] bg-[#08080f]/80 backdrop-blur-xl"
-      style={{ width: 220, left: lang === "ar" ? "auto" : 0, right: lang === "ar" ? 0 : "auto" }}
-    >
+    <>
       {/* Logo */}
       <div className="px-3 mb-8">
         <Logo />
@@ -141,7 +138,7 @@ function Sidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
         {/* QR Generator */}
         <button
           data-testid="mode-qr-btn"
-          onClick={() => setMode("qr")}
+          onClick={() => handleNav("qr")}
           className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all w-full text-start ${
             mode === "qr"
               ? "bg-gradient-to-r from-violet-500/25 to-cyan-400/15 text-white border border-violet-400/25"
@@ -165,7 +162,7 @@ function Sidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
         {/* Card Extractor */}
         <button
           data-testid="mode-cards-btn"
-          onClick={() => setMode("cards")}
+          onClick={() => handleNav("cards")}
           className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all w-full text-start ${
             mode === "cards"
               ? "bg-gradient-to-r from-violet-500/25 to-cyan-400/15 text-white border border-violet-400/25"
@@ -220,7 +217,90 @@ function Sidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
           {lang === "ar" ? "خروج" : "Sign Out"}
         </button>
       </div>
+    </>
+  );
+}
+
+/* ------------------------------ Desktop Sidebar -------------------------- */
+function DesktopSidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
+  return (
+    <aside
+      className="hidden lg:flex fixed top-0 bottom-0 z-20 flex-col py-6 px-3 border-white/[0.07] bg-[#08080f]/80 backdrop-blur-xl"
+      style={{
+        width: 220,
+        left: lang === "ar" ? "auto" : 0,
+        right: lang === "ar" ? 0 : "auto",
+        borderRightWidth: lang === "ar" ? 0 : 1,
+        borderLeftWidth: lang === "ar" ? 1 : 0,
+        borderStyle: "solid",
+        borderColor: "rgba(255,255,255,0.07)",
+      }}
+    >
+      <SidebarContent
+        mode={mode} setMode={setMode} t={t} lang={lang}
+        onSignOut={onSignOut} onToggleLang={onToggleLang}
+      />
     </aside>
+  );
+}
+
+/* ------------------------------ Mobile Drawer ---------------------------- */
+function MobileDrawer({ open, onClose, mode, setMode, t, lang, onSignOut, onToggleLang }) {
+  // Close on ESC
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  // Prevent body scroll when open
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className={`lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      />
+      {/* Drawer panel */}
+      <aside
+        className={`lg:hidden fixed top-0 bottom-0 z-40 flex flex-col py-6 px-3 bg-[#0d0d1a] w-[260px] transition-transform duration-300 ease-in-out shadow-2xl`}
+        style={{
+          left: lang === "ar" ? "auto" : 0,
+          right: lang === "ar" ? 0 : "auto",
+          transform: open
+            ? "translateX(0)"
+            : lang === "ar" ? "translateX(100%)" : "translateX(-100%)",
+          borderRightWidth: lang === "ar" ? 0 : 1,
+          borderLeftWidth: lang === "ar" ? 1 : 0,
+          borderStyle: "solid",
+          borderColor: "rgba(255,255,255,0.07)",
+        }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-white/60 hover:text-white transition"
+          style={{ left: lang === "ar" ? "auto" : "auto", right: lang === "ar" ? "auto" : 12, left: lang === "ar" ? 12 : "auto" }}
+          aria-label="Close menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </button>
+
+        <SidebarContent
+          mode={mode} setMode={setMode} t={t} lang={lang}
+          onSignOut={onSignOut} onToggleLang={onToggleLang}
+          onClose={onClose}
+        />
+      </aside>
+    </>
   );
 }
 
@@ -228,10 +308,11 @@ function Sidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
 export default function App() {
   const [lang, setLang] = useState("ar");
   const t = useMemo(() => translations[lang], [lang]);
-  const [mode, setMode] = useState("qr"); // "qr" | "cards"
+  const [mode, setMode] = useState("qr");
   const [cardState, cardDispatch] = useReducer(cardReducer, cardInitial);
   const [activated, setActivated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const toggleLang = () => setLang((l) => (l === "ar" ? "en" : "ar"));
 
@@ -243,6 +324,12 @@ export default function App() {
   const goStep = useCallback((n) => cardDispatch({ type: "SET_STEP", payload: n }), []);
 
   const sidebarWidth = 220;
+
+  const sidebarProps = {
+    mode, setMode, t, lang,
+    onToggleLang: toggleLang,
+    onSignOut: () => { signOut(_fbAuth).catch(() => {}); setActivated(false); setCurrentUser(null); },
+  };
 
   if (!activated) {
     return (
@@ -275,49 +362,63 @@ export default function App() {
         />
       </div>
 
-      {/* Sidebar */}
-      <Sidebar
-        mode={mode}
-        setMode={setMode}
-        t={t}
-        lang={lang}
-        onToggleLang={toggleLang}
-        onSignOut={() => { signOut(_fbAuth).catch(() => {}); setActivated(false); setCurrentUser(null); }}
+      {/* Desktop Sidebar — hidden on mobile */}
+      <DesktopSidebar {...sidebarProps} />
+
+      {/* Mobile Drawer */}
+      <MobileDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        {...sidebarProps}
       />
 
-      {/* Page content pushed beside sidebar */}
+      {/* Page content */}
       <div
         className="relative z-10 flex flex-col min-h-screen overflow-x-clip"
-        style={{ marginLeft: lang === "ar" ? 0 : sidebarWidth, marginRight: lang === "ar" ? sidebarWidth : 0 }}
+        style={{
+          marginLeft: lang === "ar" ? 0 : "var(--sidebar-offset, 0px)",
+          marginRight: lang === "ar" ? "var(--sidebar-offset, 0px)" : 0,
+        }}
       >
-        {/* Nav (logo removed — now in sidebar) */}
-        <header className="px-6 sm:px-10 pt-6">
-          <div className="max-w-6xl mx-auto flex items-center justify-end">
-            {/* intentionally empty — controls moved to sidebar */}
-          </div>
+        {/* inject CSS var for sidebar offset only on lg+ */}
+        <style>{`@media (min-width: 1024px) { :root { --sidebar-offset: ${sidebarWidth}px; } }`}</style>
+
+        {/* Mobile top bar */}
+        <header className="lg:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#08080f]/90 backdrop-blur-xl border-b border-white/[0.07]">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-white/70 hover:text-white transition"
+            aria-label="Open menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <Logo />
+          <div style={{ width: 36 }} /> {/* spacer to center logo */}
         </header>
 
         {/* Hero */}
-        <section className="px-6 sm:px-10 pt-10 pb-10">
+        <section className="px-4 sm:px-8 lg:px-10 pt-8 lg:pt-10 pb-6 lg:pb-10">
           <div className="max-w-6xl mx-auto">
             <span data-testid="badge-local"
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[11px] tracking-[0.22em] uppercase text-white/60">
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[10px] sm:text-[11px] tracking-[0.18em] sm:tracking-[0.22em] uppercase text-white/60">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               {mode === "qr" ? t.badge : "Excel · CSV · PDF · JPG · PNG"}
             </span>
-            <h1 className="mt-6 text-4xl sm:text-6xl font-bold leading-[1.05] tracking-tight max-w-4xl">
+            <h1 className="mt-4 sm:mt-6 text-3xl sm:text-4xl lg:text-6xl font-bold leading-[1.05] tracking-tight max-w-4xl">
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300">
                 {mode === "qr" ? t.headline : t.cardHeadline}
               </span>
             </h1>
-            <p className="mt-5 text-base sm:text-lg text-white/60 max-w-2xl">
+            <p className="mt-3 sm:mt-5 text-sm sm:text-base lg:text-lg text-white/60 max-w-2xl">
               {mode === "qr" ? t.tagline : t.cardTagline}
             </p>
           </div>
         </section>
 
         {/* Main */}
-        <main className="px-6 sm:px-10 pb-24 flex-1">
+        <main className="px-4 sm:px-8 lg:px-10 pb-20 sm:pb-24 flex-1">
           <div className="max-w-6xl mx-auto">
             {mode === "qr" ? (
               <QrGenerator t={t} lang={lang} />
@@ -338,7 +439,7 @@ export default function App() {
           </div>
         </main>
 
-        <footer className="px-6 sm:px-10 pb-10">
+        <footer className="px-4 sm:px-8 lg:px-10 pb-8 sm:pb-10">
           <div className="max-w-6xl mx-auto pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/40">
             <span>&copy; {new Date().getFullYear()} A7D TEAM &middot; {t.allRights}</span>
             <span>{t.poweredBy} A7D TEAM</span>
