@@ -142,7 +142,7 @@ export function drawStyledQr(ctx, qrData, opts) {
     }
 
     // --- Step 3: Draw every data module dot in solid fgColor on top of the image
-    //     Slightly larger dots for strong visibility against the image background
+    //     Small dots (like PAY reference) so image shows through clearly between them
     ctx.fillStyle = fgColor;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
@@ -151,18 +151,10 @@ export function drawStyledQr(ctx, qrData, opts) {
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
 
-        if (dotStyle === "dots") {
-          ctx.beginPath();
-          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.48, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (dotStyle === "rounded") {
-          const rr = cellW * 0.4;
-          ctx.beginPath();
-          ctx.roundRect(cx + cellW * 0.04, cy + cellH * 0.04, cellW * 0.92, cellH * 0.92, rr);
-          ctx.fill();
-        } else {
-          ctx.fillRect(cx, cy, cellW, cellH);
-        }
+        // Always draw as small circles when fgImage is active — matches PAY style
+        ctx.beginPath();
+        ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.36, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
