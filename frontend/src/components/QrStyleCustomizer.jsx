@@ -155,14 +155,15 @@ export function drawStyledQr(ctx, qrData, opts) {
     //     • Dark cells: large rounded fgColor square covers the image
     //     • Light cells: tiny rounded bgColor dot adds the contrast grid
     //       the camera needs to align/decode reliably.
-    const darkPad  = cellW * 0.05;          // 5% inset → ~90% fill
+    // PAY-style sizing: small dots so the background image stays visible.
+    const darkPad  = cellW * 0.10;          // 10% inset → ~80% fill
     const darkW    = cellW - darkPad * 2;
     const darkH    = cellH - darkPad * 2;
-    const darkR    = cellW * 0.18;
-    const lightPad = cellW * 0.30;          // 30% inset → ~40% fill
+    const darkR    = cellW * 0.16;
+    const lightPad = cellW * 0.32;          // 32% inset → ~36% fill (small light dots)
     const lightW   = cellW - lightPad * 2;
     const lightH   = cellH - lightPad * 2;
-    const lightR   = cellW * 0.14;
+    const lightR   = cellW * 0.10;
 
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
