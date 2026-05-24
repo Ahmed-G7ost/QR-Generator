@@ -23,10 +23,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.wo
 const A4_WIDTH = 595.2755905511812;
 const A4_HEIGHT = 841.8897637795276;
 
-// QR raster size in pixels. 256px is sharp for typical card printing
-// (a QR cell of ~150pt @ 256px ≈ 175 DPI, well above the 150 DPI print floor),
-// and ~4× lighter to render than the legacy 512px.
-const QR_PIXEL_SIZE = 256;
+// QR raster size in pixels. 200px is sharp for typical card printing
+// (a QR cell of ~150pt @ 200px ≈ 140 DPI, well above the 150 DPI print floor),
+// and optimized for smaller file sizes.
+const QR_PIXEL_SIZE = 200;
 
 export const PHASES = {
   EXTRACTING: "extracting",
@@ -275,7 +275,7 @@ export async function processPdfs({
   const h = A4_HEIGHT;
   const cw = w / cols;
   const ch = h / rows;
-  const qrDim = Math.min(cw, ch) * 0.7;
+  const qrDim = Math.min(cw, ch); // QR fills the full card cell (100%)
 
   let laidOut = 0;
   for (let i = 0; i < totalItems; i += totalCards) {
@@ -290,13 +290,11 @@ export async function processPdfs({
         ? await qrPdf.embedJpg(item.bytes)
         : await qrPdf.embedPng(item.bytes);
 
-      // Mirror Python coordinates exactly:
-      //   x = ((cols - 1 - (index % cols)) * cw) + (cw - qr_dim) / 2
-      //   y = h - (((index // cols) + 1) * ch) + (ch - qr_dim) / 2
+      // Mirror Python coordinates exactly - QR positioned at cell origin to fill entire card
       const colIdx = index % cols;
       const rowIdx = Math.floor(index / cols);
-      const x = (cols - 1 - colIdx) * cw + (cw - qrDim) / 2;
-      const y = h - (rowIdx + 1) * ch + (ch - qrDim) / 2;
+      const x = (cols - 1 - colIdx) * cw;
+      const y = h - (rowIdx + 1) * ch;
       qrPage.drawImage(pngImage, { x, y, width: qrDim, height: qrDim });
 
       laidOut += 1;
@@ -351,7 +349,11 @@ export async function processPdfs({
 
   // -------------------- PHASE 5: SAVE --------------------
   onProgress({ phase: PHASES.SAVING, percent: 0, current: 0, total: 0 });
-  const pdfBytes = await outputPdf.save();
+  const pdfBytes = await outputPdf.save({
+    useObjectStreams: true,
+    addDefaultPage: false,
+    objectsPerTick: 50,
+  });
   cancelToken.throwIfCancelled();
 
   const designName = designPdfFile.name.replace(/\.pdf$/i, "");
