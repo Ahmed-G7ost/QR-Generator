@@ -62,14 +62,14 @@ async function generateQrPng(text, config, logoImgEl, fgImgEl) {
 
   if (hasCustom) {
     // Returns { bytes, isJpeg: true }
-    return generateStyledQrPng(text, 128, config || {}, logoImgEl, fgImgEl);
+    return generateStyledQrPng(text, 100, config || {}, logoImgEl, fgImgEl);
   }
 
   // Fallback: original tiny PNG for zero-customization (smallest file)
   const dataUrl = await QRCode.toDataURL(text, {
     errorCorrectionLevel: "M",
     margin: 1,
-    width: 128,
+    width: 100,
     color: { dark: "#000000", light: "#ffffff" },
   });
   const base64 = dataUrl.split(",")[1];
@@ -344,7 +344,11 @@ export async function generateCardsPdf({
   }
 
   onProgress({ phase: PHASES.SAVING, percent: 95 });
-  const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
+  const pdfBytes = await pdfDoc.save({
+    useObjectStreams: true,
+    addDefaultPage: false,
+    objectsPerTick: 50,
+  });
   onProgress({ phase: PHASES.DONE, percent: 100 });
 
   return {
