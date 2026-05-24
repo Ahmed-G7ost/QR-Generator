@@ -1,5 +1,7 @@
+jsx
 import { useState, useRef } from "react";
-import { generateCardsPdf, downloadPdfBlob, PHASES } from "@/lib/cardProcessor";
+import { generateCardsPdf, downloadPdfBlob, PHASES, generateBackPreview } from "@/lib/cardProcessor";
+import BackPreviewModal from "./BackPreviewModal";
 
 export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, onReset }) {
   const [generating, setGenerating] = useState(false);
@@ -7,6 +9,9 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState("");
   const pdfBytesRef = useRef(null);
+  const [showBackPreview, setShowBackPreview] = useState(false);
+  const [backPreviewUrls, setBackPreviewUrls] = useState(null);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
 
   const handleGenerate = async () => {
     setGenerating(true); setProgress(0); setResult(null); setPhase("");
@@ -48,6 +53,30 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 100);
+  };
+
+  const handleBackPreview = async () => {
+    if (!state.config.show_qr) {
+      dispatch({ type: "SET_ERROR", payload: t.errorQrNotEnabled || "يجب تفعيل QR لعرض المعاينة الخلفية" });
+      return;
+    }
+
+    setGeneratingPreview(true);
+    try {
+      const { frontUrl, backUrl } = await generateBackPreview({
+        records: state.records,
+        templateFile: state.templateFile,
+        config: state.config,
+        customFontFile: state.config.custom_font || null,
+      });
+      setBackPreviewUrls({ frontUrl, backUrl });
+      setShowBackPreview(true);
+    } catch (err) {
+      console.error(err);
+      dispatch({ type: "SET_ERROR", payload: err.message || t.errorGeneric });
+    } finally {
+      setGeneratingPreview(false);
+    }
   };
 
   const gridParts = state.config.grid.split("x");
@@ -125,6 +154,33 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
 
       {/* Buttons */}
       <div className="space-y-3">
+        {/* Back Preview Button - shown before generation if QR is enabled */}
+        {!result && state.config.show_qr && (
+          <button 
+            data-testid="card-back-preview-btn" 
+            onClick={handleBackPreview} 
+            disabled={generatingPreview || generating}
+            className="w-full h-12 rounded-2xl bg-fuchsia-400/15 border border-fuchsia-400/40 text-fuchsia-200 font-semibold flex items-center justify-center gap-2 hover:bg-fuchsia-400/25 transition disabled:opacity-50">
+            {generatingPreview ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
+                  <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                {t.generatingPreview || "جاري التحضير..."}
+              </>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" fill="none"/>
+                  <path d="M9 3v18M15 3v18M3 9h18M3 15h18" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+                {t.backPreviewBtn}
+              </>
+            )}
+          </button>
+        )}
+
         {!result ? (
           <button data-testid="card-generate-btn" onClick={handleGenerate} disabled={generating}
             className="group relative w-full h-14 rounded-2xl font-bold tracking-wide overflow-hidden transition-all disabled:opacity-60">
@@ -169,6 +225,19 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
           {t.resetBtn}
         </button>
       </div>
+
+      {/* Back Preview Modal */}
+      {showBackPreview && backPreviewUrls && (
+        <BackPreviewModal
+          frontUrl={backPreviewUrls.frontUrl}
+          backUrl={backPreviewUrls.backUrl}
+          onClose={() => {
+            setShowBackPreview(false);
+            setBackPreviewUrls(null);
+          }}
+          t={t}
+        />
+      )}
     </div>
   );
 }
