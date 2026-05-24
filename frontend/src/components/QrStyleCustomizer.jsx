@@ -32,52 +32,6 @@ function MiniSlider({ label, value, onChange, min, max, testId }) {
 }
 
 /**
- * Draws a single QR module dot at (x,y) with size (w,h) using the given style.
- * `scale` shrinks the dot symmetrically around its center (used by the
- * fgImage halftone mode where dots must stay small so the image shows).
- */
-function drawDot(ctx, x, y, w, h, style, scale = 1) {
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const dw = w * scale;
-  const dh = h * scale;
-  const dx = cx - dw / 2;
-  const dy = cy - dh / 2;
-
-  ctx.beginPath();
-  if (style === "dots") {
-    ctx.arc(cx, cy, dw / 2, 0, Math.PI * 2);
-  } else if (style === "rounded") {
-    ctx.roundRect(dx, dy, dw, dh, dw * 0.3);
-  } else if (style === "extra-rounded") {
-    ctx.roundRect(dx, dy, dw, dh, dw * 0.5);
-  } else if (style === "classy") {
-    // Rounded only on top-left and bottom-right (asymmetric, elegant)
-    const r = dw * 0.45;
-    ctx.moveTo(dx + r, dy);
-    ctx.lineTo(dx + dw, dy);
-    ctx.lineTo(dx + dw, dy + dh - r);
-    ctx.quadraticCurveTo(dx + dw, dy + dh, dx + dw - r, dy + dh);
-    ctx.lineTo(dx, dy + dh);
-    ctx.lineTo(dx, dy + r);
-    ctx.quadraticCurveTo(dx, dy, dx + r, dy);
-    ctx.closePath();
-  } else if (style === "diamond") {
-    // Slightly larger than square (×1.05) so visual coverage matches squares
-    const k = dw * 0.525;
-    ctx.moveTo(cx, cy - k);
-    ctx.lineTo(cx + k, cy);
-    ctx.lineTo(cx, cy + k);
-    ctx.lineTo(cx - k, cy);
-    ctx.closePath();
-  } else {
-    // square (default)
-    ctx.rect(dx, dy, dw, dh);
-  }
-  ctx.fill();
-}
-
-/**
  * Draws a styled QR code on a canvas with all customization options.
  */
 export function drawStyledQr(ctx, qrData, opts) {
@@ -94,17 +48,19 @@ export function drawStyledQr(ctx, qrData, opts) {
 
   const hasLogo = !!logoImg;
   // Cap at 22% to stay well within Error Correction H recovery budget (~30%).
+  // Anything larger + the clear ring around the logo starts breaking scanners.
   const safeLogoSize = hasLogo ? Math.min(logoSize, 22) : 0;
 
   const hasFgImage = !!fgImage;
   const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: (hasLogo || hasFgImage) ? "H" : "M" });
   const modules = qr.modules;
   const size = modules.size;
-  const margin = 4;
+  const margin = 4; // QR standard requires 4-module quiet zone for reliable scanning
   const total = size + margin * 2;
   const cellW = width / total;
   const cellH = height / total;
 
+  // Finder pattern positions
   const finderPositions = [
     { r: 0, c: 0 },
     { r: 0, c: size - 7 },
@@ -138,22 +94,34 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.fillRect(x, y, width, height);
   }
 
-  // =========== fgImage mode (PAY / halftone style) ===========
+    // =========== fgImage mode (PAY / halftone style) ===========
+  // The trick of designs like the PAY QR: keep the background image at FULL
+  // saturation (no veil) and create contrast for the scanner using TWO dots:
+  //   • Dark module → large solid fgColor square covers the image cell
+  //   • Light module → small bgColor (white) dot sits on top of the image
+  //     This second dot is what makes the camera see a regular grid of
+  //     light/dark cells over any picture.
   if (fgImage) {
+    // --- Step 1: Draw the image ONLY inside the QR data area (not the quiet
+    //     zone). The outer margin stays bgColor so the QR has a clean white
+    //     frame around it, exactly like a printed sticker.
     const qrX = x + margin * cellW;
     const qrY = y + margin * cellH;
     const qrSize = size * cellW;
 
     ctx.save();
+    // Clip to the QR data square only
     ctx.beginPath();
     ctx.rect(qrX, qrY, qrSize, qrSize);
     ctx.clip();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
+    // Image is stretched to fill the data area (not the whole canvas)
     ctx.drawImage(fgImage, qrX, qrY, qrSize, qrSize);
     ctx.restore();
 
-    // Finder patterns
+    // --- Step 2: Finder patterns (eyes) — classic nested squares with a
+    //     light backing ring → cameras lock on immediately.
     const finderDotColor = eyeColor || fgColor;
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
@@ -161,41 +129,62 @@ export function drawStyledQr(ctx, qrData, opts) {
       const fw = cellW * 7;
       const fh = cellH * 7;
 
+      // Light backing rectangle (slightly larger) for high contrast
       const pad = cellW * 0.35;
       ctx.fillStyle = bgColor;
       ctx.beginPath();
       ctx.roundRect(fx - pad, fy - pad, fw + pad * 2, fh + pad * 2, cellW * 1.2);
       ctx.fill();
 
+      // Outer solid square
       ctx.fillStyle = finderDotColor;
       ctx.beginPath();
       ctx.roundRect(fx, fy, fw, fh, cellW * 0.6);
       ctx.fill();
-
+      // Light gap ring
       ctx.fillStyle = bgColor;
       ctx.beginPath();
       ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, cellW * 0.5);
       ctx.fill();
-
+      // Inner solid square
       ctx.fillStyle = finderDotColor;
       ctx.beginPath();
       ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, cellW * 0.4);
       ctx.fill();
     }
 
-    // Data modules — Joval-PAY halftone, follows user-selected dotStyle.
-    const dotScale = 0.56;
+    // --- Step 3: Data modules — Joval-PAY style halftone over the background.
+    //     Small, sharp square dots so the background image stays clearly
+    //     visible through the QR (camera still locks via finder patterns).
+    //     • Dark cells: small fgColor square (~45% of cell)
+    //     • Light cells: small bgColor square of the same size, providing
+    //       the alternating grid contrast required for decoding.
+    const darkPad  = cellW * 0.28;          // 28% inset → ~44% fill (small dark dots)
+    const darkW    = cellW - darkPad * 2;
+    const darkH    = cellH - darkPad * 2;
+    const darkR    = cellW * 0.04;          // nearly sharp corners
+    const lightPad = cellW * 0.28;          // 28% inset → ~44% fill (matching light dots)
+    const lightW   = cellW - lightPad * 2;
+    const lightH   = cellH - lightPad * 2;
+    const lightR   = cellW * 0.04;
+
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (isFinderCell(r, c)) continue;
         const baseX = x + (c + margin) * cellW;
         const baseY = y + (r + margin) * cellH;
         if (modules.get(r, c)) {
+          // Dark module → large foreground square on top of image
           ctx.fillStyle = fgColor;
-          drawDot(ctx, baseX, baseY, cellW, cellH, dotStyle, dotScale);
+          ctx.beginPath();
+          ctx.roundRect(baseX + darkPad, baseY + darkPad, darkW, darkH, darkR);
+          ctx.fill();
         } else {
+          // Light module → small bgColor highlight (the PAY-style accent)
           ctx.fillStyle = bgColor;
-          drawDot(ctx, baseX, baseY, cellW, cellH, dotStyle, dotScale);
+          ctx.beginPath();
+          ctx.roundRect(baseX + lightPad, baseY + lightPad, lightW, lightH, lightR);
+          ctx.fill();
         }
       }
     }
@@ -217,7 +206,7 @@ export function drawStyledQr(ctx, qrData, opts) {
 
     const realEyeColor = eyeColor || (useGradient ? gradientColor1 : fgColor);
 
-    // Finder patterns
+    // Draw finder patterns
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
@@ -247,7 +236,7 @@ export function drawStyledQr(ctx, qrData, opts) {
       }
     }
 
-    // Data modules
+    // Draw data modules
     ctx.fillStyle = fillStyle;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
@@ -255,8 +244,18 @@ export function drawStyledQr(ctx, qrData, opts) {
         if (isFinderCell(r, c)) continue;
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
-        const inset = (dotStyle === "square") ? 1.0 : 0.92;
-        drawDot(ctx, cx, cy, cellW, cellH, dotStyle, inset);
+        if (dotStyle === "dots") {
+          ctx.beginPath();
+          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.48, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (dotStyle === "rounded") {
+          const rr = cellW * 0.35;
+          ctx.beginPath();
+          ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
+          ctx.fill();
+        } else {
+          ctx.fillRect(cx, cy, cellW, cellH);
+        }
       }
     }
   }
@@ -278,17 +277,22 @@ export function drawStyledQr(ctx, qrData, opts) {
     }
   }
 
-  // Logo overlay — circular clear zone + circular logo
+  // Logo overlay — circular clear zone + circular logo (professional look)
+  // We always render the logo as a perfect circle, regardless of dotStyle,
+  // with a generous white ring around it so scanners still lock in.
   if (hasLogo) {
     const logoDim = width * (safeLogoSize / 100);
     const cxCenter = x + width / 2;
     const cyCenter = y + height / 2;
+    // Clear circular zone (slightly larger than logo) — covers underlying
+    // QR modules / background image so the camera sees a clean disk.
     const clearRadius = logoDim / 2 + logoDim * 0.20;
     ctx.fillStyle = bgColor;
     ctx.beginPath();
     ctx.arc(cxCenter, cyCenter, clearRadius, 0, Math.PI * 2);
     ctx.fill();
 
+    // Thin outer ring for a more polished, "branded" look
     const ringW = Math.max(1, width * 0.005);
     ctx.strokeStyle = (eyeColor || fgColor);
     ctx.lineWidth = ringW;
@@ -296,6 +300,7 @@ export function drawStyledQr(ctx, qrData, opts) {
     ctx.arc(cxCenter, cyCenter, clearRadius - ringW / 2, 0, Math.PI * 2);
     ctx.stroke();
 
+    // Clip logo to a circle and draw it inside the cleared zone
     ctx.save();
     ctx.beginPath();
     ctx.arc(cxCenter, cyCenter, logoDim / 2, 0, Math.PI * 2);
@@ -309,9 +314,11 @@ export function drawStyledQr(ctx, qrData, opts) {
 
 /**
  * Generates a QR image (Uint8Array) with custom styles. Used by cardProcessor.
+ * Returns { bytes, isJpeg } — JPEG for styled QR (small), PNG for simple.
  */
 export async function generateStyledQrPng(text, width, qrConfig, logoImgElement, fgImgElement) {
-  const renderSize = 256;
+  // Use 200px for PDF — ensures reliable scanning with optimized file size
+  const renderSize = 200;
   const canvas = typeof OffscreenCanvas !== "undefined"
     ? new OffscreenCanvas(renderSize, renderSize)
     : document.createElement("canvas");
@@ -337,11 +344,12 @@ export async function generateStyledQrPng(text, width, qrConfig, logoImgElement,
     fgImage: fgImgElement || null,
   });
 
+  // Use JPEG with compression for much smaller PDF output
   let blob;
   if (canvas.convertToBlob) {
-    blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.7 });
+    blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.6 });
   } else {
-    blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.7));
+    blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.6));
   }
   const buffer = await blob.arrayBuffer();
   return { bytes: new Uint8Array(buffer), isJpeg: true };
@@ -357,6 +365,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
   const fgImgInputRef = useRef(null);
   const [fgImgPreviewUrl, setFgImgPreviewUrl] = useState(null);
 
+  // Load logo image element when file changes
   useEffect(() => {
     if (!config.qr_logo) {
       logoImgRef.current = null;
@@ -371,6 +380,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
     return () => URL.revokeObjectURL(url);
   }, [config.qr_logo]);
 
+  // Load fg texture image element when file changes
   useEffect(() => {
     if (!config.qr_fg_image) {
       fgImgRef.current = null;
@@ -385,6 +395,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
     return () => URL.revokeObjectURL(url);
   }, [config.qr_fg_image]);
 
+  // Draw QR preview
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -395,6 +406,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
 
     ctx.clearRect(0, 0, dim, dim);
 
+    // Checkerboard bg for transparency
     const checkSize = 8;
     for (let ry = 0; ry < dim; ry += checkSize) {
       for (let rx = 0; rx < dim; rx += checkSize) {
@@ -469,6 +481,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
       </div>
 
       <div className={`grid gap-4 ${compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
+        {/* Left: Controls */}
         <div className="space-y-3">
           {/* Colors */}
           <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3 space-y-2">
@@ -491,7 +504,7 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
             </div>
           </div>
 
-          {/* Dot Style — now 6 shapes */}
+          {/* Dot Style */}
           <div className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
             <span className="text-[11px] text-white/50 font-semibold block mb-2">{t.qrDotStyle}</span>
             <div className="grid grid-cols-3 gap-1.5">
@@ -499,9 +512,6 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
                 { value: "square", label: t.qrDotSquare },
                 { value: "dots", label: t.qrDotDots },
                 { value: "rounded", label: t.qrDotRounded },
-                { value: "extra-rounded", label: t.qrDotExtraRounded },
-                { value: "classy", label: t.qrDotClassy },
-                { value: "diamond", label: t.qrDotDiamond },
               ].map((opt) => (
                 <button key={opt.value} data-testid={`qr-dot-${opt.value}`}
                   onClick={() => updateConfig("qr_dot_style", opt.value)}
