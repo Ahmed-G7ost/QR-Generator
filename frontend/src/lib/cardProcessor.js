@@ -379,3 +379,203 @@ export function previewPdfBlob(pdfBytes) {
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
+/**
+ * Generate back preview images (front page + QR back page) for alignment checking.
+ * Returns URLs for canvas images of the first page (front and back).
+ */
+export async function generateBackPreview({
+  records,
+  templateFile,
+  config,
+  customFontFile = null,
+}) {
+  if (!records || records.length === 0) {
+    throw new Error("لا توجد سجلات لتوليدها.");
+  }
+  if (!templateFile) throw new Error("لم يتم اختيار صورة قالب.");
+  if (!config.show_qr) throw new Error("يجب تفعيل QR لعرض المعاينة الخلفية.");
+
+  // Create two separate PDFs: front page and back page
+  const pdfDocFront = await PDFDocument.create();
+  const pdfDocBack = await PDFDocument.create();
+  
+  pdfDocFront.registerFontkit(fontkit);
+  pdfDocBack.registerFontkit(fontkit);
+
+  // Load fonts
+  let boldFont;
+  if (customFontFile) {
+    const buf = await customFontFile.arrayBuffer();
+    const embeddedFront = await pdfDocFront.embedFont(new Uint8Array(buf), { subset: true });
+    const embeddedBack = await pdfDocBack.embedFont(new Uint8Array(buf), { subset: true });
+    boldFont = { front: embeddedFront, back: embeddedBack };
+  } else {
+    const bfFront = await pdfDocFront.embedFont(StandardFonts.HelveticaBold);
+    const bfBack = await pdfDocBack.embedFont(StandardFonts.HelveticaBold);
+    boldFont = { front: bfFront, back: bfBack };
+  }
+
+  // Embed template in both PDFs
+  const templateImageFront = await embedTemplate(pdfDocFront, templateFile);
+  const templateImageBack = await embedTemplate(pdfDocBack, templateFile);
+
+  const grid = config.grid || "4x8";
+  const [colsStr, rowsStr] = grid.split("x");
+  const cols = parseInt(colsStr, 10);
+  const rows = parseInt(rowsStr, 10);
+  const cardsPerPage = cols * rows;
+
+  const cellW = A4_W / cols;
+  const cellH = A4_H / rows;
+  const margin = Math.min(cellW, cellH) * 0.02;
+  const cardW = cellW - margin * 2;
+  const cardH = cellH - margin * 2;
+
+  const tplRatio = templateImageFront.width / templateImageFront.height;
+  const cellRatio = cardW / cardH;
+  let drawW, drawH;
+  if (tplRatio > cellRatio) {
+    drawW = cardW;
+    drawH = cardW / tplRatio;
+  } else {
+    drawH = cardH;
+    drawW = cardH * tplRatio;
+  }
+
+  // Load QR logo and fg image if present
+  let logoImgEl = null;
+  let fgImgEl = null;
+  if (config.qr_logo) {
+    try {
+      const logoUrl = URL.createObjectURL(config.qr_logo);
+      logoImgEl = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = logoUrl;
+      });
+      URL.revokeObjectURL(logoUrl);
+    } catch { /* logo load failed */ }
+  }
+  if (config.qr_fg_image) {
+    try {
+      const fgUrl = URL.createObjectURL(config.qr_fg_image);
+      fgImgEl = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = fgUrl;
+      });
+      URL.revokeObjectURL(fgUrl);
+    } catch { /* fg image load failed */ }
+  }
+
+  // QR cache for back page
+  const qrCache = new Map();
+  async function getQrImage(key, pdfDoc) {
+    if (qrCache.has(key)) return qrCache.get(key);
+    const { bytes, isJpeg } = await generateQrPng(key, config, logoImgEl, fgImgEl);
+    const img = isJpeg ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
+    qrCache.set(key, img);
+    return img;
+  }
+
+  // Generate FRONT page (first page only, with all text + template)
+  const pageFront = pdfDocFront.addPage([A4_W, A4_H]);
+  const pageBack = pdfDocBack.addPage([A4_W, A4_H]);
+
+  const firstPageRecords = records.slice(0, Math.min(cardsPerPage, records.length));
+
+  let cardCounter = 0;
+  for (let i = 0; i < firstPageRecords.length; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cellX = col * cellW + margin;
+    const cellYBottom = A4_H - (row + 1) * cellH + margin;
+    const dx = cellX + (cardW - drawW) / 2;
+    const dy = cellYBottom + (cardH - drawH) / 2;
+
+    const record = firstPageRecords[i];
+
+    // === FRONT PAGE: Template + Text ===
+    pageFront.drawImage(templateImageFront, { x: dx, y: dy, width: drawW, height: drawH });
+
+    // Username
+    {
+      const fSize = scaleFont(config.username_font_size || 14, drawW);
+      const { x, y } = pctToPdf(config.username_x ?? 50, config.username_y ?? 40, dx, dy, drawW, drawH);
+      drawCenteredText(pageFront, record.username, boldFont.front, fSize, x, y, hexToRgb(config.username_color));
+    }
+    // Password
+    {
+      const fSize = scaleFont(config.password_font_size || 12, drawW);
+      const { x, y } = pctToPdf(config.password_x ?? 50, config.password_y ?? 60, dx, dy, drawW, drawH);
+      drawCenteredText(pageFront, record.password, boldFont.front, fSize, x, y, hexToRgb(config.password_color));
+    }
+    // Date
+    if (config.show_date && config.date_text) {
+      const fSize = scaleFont(config.date_font_size || 10, drawW);
+      const { x, y } = pctToPdf(config.date_x ?? 50, config.date_y ?? 85, dx, dy, drawW, drawH);
+      let dateText = config.date_text;
+      if (config.show_counter) dateText = `${dateText}/${cardCounter + 1}`;
+      drawCenteredText(pageFront, dateText, boldFont.front, fSize, x, y, hexToRgb(config.date_color));
+    }
+    // Label
+    if (config.label_text) {
+      const fSize = scaleFont(config.label_font_size || 12, drawW);
+      const { x, y } = pctToPdf(config.label_x ?? 50, config.label_y ?? 10, dx, dy, drawW, drawH);
+      drawCenteredText(pageFront, config.label_text, boldFont.front, fSize, x, y, hexToRgb(config.label_color));
+    }
+
+    // === BACK PAGE: Template + QR only (mirrored horizontally for duplex printing) ===
+    // Draw template on back
+    pageBack.drawImage(templateImageBack, { x: dx, y: dy, width: drawW, height: drawH });
+
+    // Generate QR
+    const qrType = config.qr_content || "username";
+    const server = (config.server_address || "").trim();
+    let qrData = "";
+    if (qrType === "link" && server) {
+      qrData = `http://${server}/login?username=${record.username}&password=${record.password}`;
+    } else if (qrType === "password") {
+      qrData = String(record.password || "");
+    } else if (qrType === "both") {
+      qrData = `${record.username || ""}:${record.password || ""}`;
+    } else {
+      qrData = String(record.username || "");
+    }
+
+    if (qrData) {
+      const qrImg = await getQrImage(qrData, pdfDocBack);
+      const qrSizePct = Number(config.qr_size || 25);
+      const qrDim = Math.min(drawW, drawH) * qrSizePct / 100;
+      
+      // Mirror X position for back side (flip horizontally)
+      const qrXPct = 100 - (config.qr_x ?? 50);
+      const { x: qrCx, y: qrCy } = pctToPdf(qrXPct, config.qr_y ?? 75, dx, dy, drawW, drawH);
+      
+      pageBack.drawImage(qrImg, {
+        x: qrCx - qrDim / 2,
+        y: qrCy - qrDim / 2,
+        width: qrDim,
+        height: qrDim,
+      });
+    }
+
+    cardCounter += 1;
+  }
+
+  // Save both PDFs to bytes
+  const frontBytes = await pdfDocFront.save({ useObjectStreams: true });
+  const backBytes = await pdfDocBack.save({ useObjectStreams: true });
+
+  // Convert to blob URLs for rendering
+  const frontBlob = new Blob([frontBytes], { type: "application/pdf" });
+  const backBlob = new Blob([backBytes], { type: "application/pdf" });
+  const frontUrl = URL.createObjectURL(frontBlob);
+  const backUrl = URL.createObjectURL(backBlob);
+
+  return { frontUrl, backUrl };
+}
+
