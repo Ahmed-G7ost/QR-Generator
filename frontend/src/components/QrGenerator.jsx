@@ -6,7 +6,8 @@ import {
   CancelToken,
   isCancelledError,
 } from "@/lib/pdfProcessor";
-import QrStyleCustomizer from "@/components/QrStyleCustomizer";
+import QrStyleCustomizer, { drawStyledQr } from "@/components/QrStyleCustomizer";
+import QRCode from "qrcode";
 
 /* ----------------------------- File drop zone ----------------------------- */
 const Dropzone = ({ title, hint, files, onFiles, onRemove, t, testId, accent, disabled, multiple = false }) => {
@@ -135,6 +136,233 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
   );
 };
 
+/* --------------------------- QR Preview Modal ---------------------------- */
+const QrPreviewModal = ({ open, onClose, designPdf, cols, rows, qrStyle, t, lang }) => {
+  const canvasRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+
+  useEffect(() => {
+    if (!open || !designPdf || !canvasRef.current) return;
+    
+    const drawPreview = async () => {
+      setLoading(true);
+      setPreviewReady(false);
+      
+      try {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        
+        // A4 dimensions scaled down
+        const scale = 0.5;
+        const w = 595.28 * scale;
+        const h = 841.89 * scale;
+        canvas.width = w;
+        canvas.height = h;
+        
+        // Clear canvas with dark background
+        ctx.fillStyle = "#0d0d18";
+        ctx.fillRect(0, 0, w, h);
+        
+        // Load design PDF first page as image
+        const pdfData = await designPdf.arrayBuffer();
+        const pdfjs = await import("pdfjs-dist/build/pdf");
+        const pdf = await pdfjs.getDocument({ data: pdfData }).promise;
+        const page = await pdf.getPage(1);
+        
+        // Render design PDF page
+        const viewport = page.getViewport({ scale: scale });
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        }).promise;
+        
+        // Draw QR grid overlay
+        const cw = w / cols;
+        const ch = h / rows;
+        const qrDim = Math.min(cw, ch);
+        
+        // Generate sample QR
+        const hasCustomStyle = !!(qrStyle && (
+          (qrStyle.qr_fg_color && qrStyle.qr_fg_color !== "#000000") ||
+          (qrStyle.qr_bg_color && qrStyle.qr_bg_color !== "#ffffff") ||
+          (qrStyle.qr_dot_style && qrStyle.qr_dot_style !== "square") ||
+          qrStyle.qr_eye_color ||
+          qrStyle.qr_use_gradient ||
+          qrStyle.qr_frame ||
+          (qrStyle.qr_bg_shape && qrStyle.qr_bg_shape !== "none") ||
+          qrStyle.qr_logo ||
+          qrStyle.qr_fg_image
+        ));
+        
+        // Load logo and fg image if present
+        let logoImg = null;
+        let fgImg = null;
+        
+        if (qrStyle.qr_logo) {
+          logoImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = URL.createObjectURL(qrStyle.qr_logo);
+          });
+        }
+        
+        if (qrStyle.qr_fg_image) {
+          fgImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = URL.createObjectURL(qrStyle.qr_fg_image);
+          });
+        }
+        
+        // Draw sample QR codes in each grid cell
+        const totalCards = Math.min(cols * rows, 8); // Show max 8 for preview
+        for (let index = 0; index < totalCards; index++) {
+          const colIdx = index % cols;
+          const rowIdx = Math.floor(index / cols);
+          const x = (cols - 1 - colIdx) * cw;
+          const y = h - (rowIdx + 1) * ch;
+          
+          // Draw semi-transparent overlay to show QR position
+          ctx.save();
+          ctx.globalAlpha = 0.85;
+          
+          if (hasCustomStyle) {
+            // Draw styled QR
+            drawStyledQr(ctx, `SAMPLE-${index + 1}`, {
+              width: qrDim,
+              height: qrDim,
+              x: x,
+              y: y,
+              fgColor: qrStyle.qr_fg_color || "#000000",
+              bgColor: qrStyle.qr_bg_color || "#ffffff",
+              dotStyle: qrStyle.qr_dot_style || "square",
+              eyeColor: qrStyle.qr_eye_color || "",
+              useGradient: qrStyle.qr_use_gradient || false,
+              gradientColor1: qrStyle.qr_gradient_color1 || "#000000",
+              gradientColor2: qrStyle.qr_gradient_color2 || "#0066ff",
+              gradientType: qrStyle.qr_gradient_type || "linear",
+              frame: qrStyle.qr_frame || false,
+              frameColor: qrStyle.qr_frame_color || "#000000",
+              frameWidth: (qrStyle.qr_frame_width || 2) * (qrDim / 200),
+              bgShape: qrStyle.qr_bg_shape || "none",
+              logoImg: logoImg,
+              logoSize: qrStyle.qr_logo_size || 20,
+              fgImage: fgImg,
+            });
+          } else {
+            // Draw simple QR
+            const qrDataUrl = await QRCode.toDataURL(`SAMPLE-${index + 1}`, {
+              width: qrDim * 2,
+              margin: 1,
+              errorCorrectionLevel: "M",
+            });
+            const qrImg = await new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => resolve(img);
+              img.src = qrDataUrl;
+            });
+            ctx.drawImage(qrImg, x, y, qrDim, qrDim);
+          }
+          
+          ctx.restore();
+        }
+        
+        setPreviewReady(true);
+      } catch (err) {
+        console.error("Preview error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    drawPreview();
+  }, [open, designPdf, cols, rows, qrStyle]);
+
+  if (!open) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-opacity"
+      />
+      
+      {/* Modal */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="pointer-events-auto bg-[#0d0d18] rounded-3xl border border-white/10 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              {lang === "ar" ? "معاينة QR خلف البطاقة" : "QR Behind Card Preview"}
+            </h3>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="p-6 overflow-auto max-h-[calc(90vh-80px)]">
+            {loading && (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <svg className="animate-spin h-10 w-10 text-cyan-400" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
+                  <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                <p className="text-white/60 text-sm">{lang === "ar" ? "جاري تحميل المعاينة..." : "Loading preview..."}</p>
+              </div>
+            )}
+            
+            {!loading && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-auto rounded-lg"
+                    style={{ imageRendering: "crisp-edges" }}
+                  />
+                </div>
+                
+                {previewReady && (
+                  <div className="flex items-start gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0 mt-0.5">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" className="text-cyan-400" />
+                      <path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-cyan-400" />
+                    </svg>
+                    <div className="text-sm text-white/70 leading-relaxed">
+                      {lang === "ar" ? (
+                        <>
+                          <strong className="text-cyan-300">ملاحظة:</strong> هذه معاينة للصفحة الأولى فقط. QR يملأ البطاقة بالكامل كما هو موضح. الملف النهائي سيحتوي على جميع البطاقات.
+                        </>
+                      ) : (
+                        <>
+                          <strong className="text-cyan-300">Note:</strong> This is a preview of the first page only. QR fills the entire card as shown. The final file will contain all cards.
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 /* ------------------------------- QR Generator ------------------------------ */
 const DEFAULT_QR_STYLE = {
   qr_fg_color: "#000000",
@@ -163,6 +391,7 @@ export default function QrGenerator({ t, lang }) {
   const [rows, setRows] = useState(4);
   const [qrStyle, setQrStyle] = useState({ ...DEFAULT_QR_STYLE });
   const [showQrStyle, setShowQrStyle] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [status, setStatus] = useState({ phase: null, message: "", percent: 0, current: 0, total: 0, workers: 0 });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
@@ -354,6 +583,21 @@ export default function QrGenerator({ t, lang }) {
             </div>
 
             <div className="mt-6 space-y-3">
+              {/* Preview Button - Show before processing */}
+              {!processing && designPdf && (
+                <button
+                  onClick={() => setShowPreview(true)}
+                  data-testid="qr-preview-overlay-btn"
+                  className="w-full h-12 rounded-2xl bg-cyan-400/15 border border-cyan-400/40 text-cyan-200 font-semibold flex items-center justify-center gap-2 hover:bg-cyan-400/25 transition"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                  {lang === "ar" ? "معاينة QR خلف البطاقة" : "Preview QR Behind Card"}
+                </button>
+              )}
+              
               {!processing ? (
                 <button onClick={handleStart} data-testid="qr-start-btn" className="group relative w-full h-14 rounded-2xl font-bold tracking-wide overflow-hidden transition-all">
                   <span className="absolute inset-0 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400" />
@@ -391,6 +635,18 @@ export default function QrGenerator({ t, lang }) {
           </div>
         </div>
       </div>
+      
+      {/* QR Preview Modal */}
+      <QrPreviewModal
+        open={showPreview}
+        onClose={() => setShowPreview(false)}
+        designPdf={designPdf}
+        cols={parseInt(cols, 10)}
+        rows={parseInt(rows, 10)}
+        qrStyle={qrStyle}
+        t={t}
+        lang={lang}
+      />
     </div>
   );
 }
