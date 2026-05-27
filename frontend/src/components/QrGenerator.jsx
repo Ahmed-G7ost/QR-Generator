@@ -152,6 +152,9 @@ const DEFAULT_QR_STYLE = {
   qr_logo: null,
   qr_logo_size: 20,
   qr_fg_image: null,
+  qr_size: 100,
+  qr_position_x: 0,
+  qr_position_y: 0,
 };
 
 export default function QrGenerator({ t, lang }) {
@@ -305,6 +308,84 @@ export default function QrGenerator({ t, lang }) {
               <div className="grid grid-cols-2 gap-3">
                 <NumberField label={t.colsLabel} value={cols} onChange={setCols} testId="cols-input" disabled={processing} />
                 <NumberField label={t.rowsLabel} value={rows} onChange={setRows} testId="rows-input" disabled={processing} />
+              </div>
+
+              {/* QR Size & Position Controls */}
+              <div className="space-y-4 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-4">
+                <h4 className="text-[11px] uppercase tracking-[0.2em] text-cyan-300/80 font-semibold flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="3" width="7" height="7" stroke="currentColor" strokeWidth="2"/>
+                    <rect x="14" y="3" width="7" height="7" stroke="currentColor" strokeWidth="2"/>
+                    <rect x="3" y="14" width="7" height="7" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  {lang === "ar" ? "التحكم في QR" : "QR Control"}
+                </h4>
+                
+                {/* QR Size */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] uppercase tracking-[0.15em] text-white/50 font-medium">
+                    {lang === "ar" ? "حجم QR (%)" : "QR Size (%)"}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="range" 
+                      min="30" 
+                      max="100" 
+                      value={qrStyle.qr_size || 100}
+                      onChange={(e) => updateQrStyle("qr_size", parseInt(e.target.value))}
+                      disabled={processing}
+                      className="flex-1"
+                      data-testid="qr-size-slider"
+                    />
+                    <span className="text-white/70 text-sm font-mono w-12 text-center">
+                      {qrStyle.qr_size || 100}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Position X */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] uppercase tracking-[0.15em] text-white/50 font-medium">
+                    {lang === "ar" ? "الموضع الأفقي" : "Position X"}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="range" 
+                      min="-50" 
+                      max="50" 
+                      value={qrStyle.qr_position_x || 0}
+                      onChange={(e) => updateQrStyle("qr_position_x", parseInt(e.target.value))}
+                      disabled={processing}
+                      className="flex-1"
+                      data-testid="qr-position-x-slider"
+                    />
+                    <span className="text-white/70 text-sm font-mono w-12 text-center">
+                      {qrStyle.qr_position_x || 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Position Y */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] uppercase tracking-[0.15em] text-white/50 font-medium">
+                    {lang === "ar" ? "الموضع العمودي" : "Position Y"}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="range" 
+                      min="-50" 
+                      max="50" 
+                      value={qrStyle.qr_position_y || 0}
+                      onChange={(e) => updateQrStyle("qr_position_y", parseInt(e.target.value))}
+                      disabled={processing}
+                      className="flex-1"
+                      data-testid="qr-position-y-slider"
+                    />
+                    <span className="text-white/70 text-sm font-mono w-12 text-center">
+                      {qrStyle.qr_position_y || 0}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* QR style customization toggle */}
