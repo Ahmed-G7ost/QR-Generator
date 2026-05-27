@@ -144,9 +144,66 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
   const canvasRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [cardOpacity, setCardOpacity] = useState(40); // نسبة شفافية البطاقات (0-100)
+  const [debouncedOpacity, setDebouncedOpacity] = useState(40); // القيمة المستخدمة للرسم
+  const renderTimeoutRef = useRef(null);
+  const cachedDataRef = useRef(null); // لحفظ البيانات المحملة
 
+  // Debounce opacity changes for smooth slider
+  useEffect(() => {
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
+    }
+    
+    renderTimeoutRef.current = setTimeout(() => {
+      setDebouncedOpacity(cardOpacity);
+    }, 50); // تأخير بسيط للسلاسة
+    
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
+  }, [cardOpacity]);
+
+  // Load and cache PDF and QR data
   useEffect(() => {
     if (!designPdfFile) return;
+    
+    const loadData = async () => {
+      try {
+        // Load PDF
+        const arrayBuffer = await designPdfFile.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        
+        // Generate QR
+        const qrDataUrl = await QRCode.toDataURL("SAMPLE-QR-123456", {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 200,
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+        
+        const qrImage = new Image();
+        await new Promise((resolve, reject) => {
+          qrImage.onload = resolve;
+          qrImage.onerror = reject;
+          qrImage.src = qrDataUrl;
+        });
+        
+        // Cache everything
+        cachedDataRef.current = { page, qrImage };
+      } catch (error) {
+        console.error("Preview load error:", error);
+      }
+    };
+    
+    loadData();
+  }, [designPdfFile]);
+
+  // Render preview (fast, uses cached data)
+  useEffect(() => {
+    if (!cachedDataRef.current) return;
     
     const renderPreview = async () => {
       setLoading(true);
@@ -155,48 +212,29 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         if (!canvas) return;
         
         const ctx = canvas.getContext("2d");
+        const { page, qrImage } = cachedDataRef.current;
         
-        // Load first page of design PDF
-        const arrayBuffer = await designPdfFile.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
-        
-        // Set canvas size to A4 proportions
+        // Set canvas size
         const viewport = page.getViewport({ scale: 2 });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         
-        // Calculate grid cell dimensions
+        // Calculate dimensions
         const w = canvas.width;
         const h = canvas.height;
         const cw = w / cols;
         const ch = h / rows;
         
-        // Calculate QR dimensions
         const qrSizePercent = (qrStyle?.qr_size || 100) / 100;
         const qrDim = Math.min(cw, ch) * qrSizePercent;
         
-        // Calculate position offsets
         const positionXOffset = ((qrStyle?.qr_position_x || 0) / 100) * cw;
         const positionYOffset = ((qrStyle?.qr_position_y || 0) / 100) * ch;
         
-        // Generate sample QR code
-        const qrDataUrl = await QRCode.toDataURL("SAMPLE-QR-123456", {
-          errorCorrectionLevel: "M",
-          margin: 1,
-          width: 200,
-          color: { dark: "#000000", light: "#ffffff" },
-        });
+        // Clear canvas
+        ctx.clearRect(0, 0, w, h);
         
-        // Load QR image
-        const qrImage = new Image();
-        await new Promise((resolve, reject) => {
-          qrImage.onload = resolve;
-          qrImage.onerror = reject;
-          qrImage.src = qrDataUrl;
-        });
-        
-        // Draw grid lines first for reference
+        // Draw grid lines
         ctx.strokeStyle = "rgba(34, 211, 238, 0.4)";
         ctx.lineWidth = 2;
         for (let row = 0; row <= rows; row++) {
@@ -212,30 +250,27 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
           ctx.stroke();
         }
         
-        // LAYER 1: Draw QR codes in grid (الخلف - QR)
+        // LAYER 1: Draw QR codes (الخلف)
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
-            // Calculate cell center (RTL: reversed column index)
             const colIdx = cols - 1 - col;
             const cellCenterX = colIdx * cw + cw / 2;
             const cellCenterY = row * ch + ch / 2;
             
-            // Position QR at center with custom offsets
             const x = cellCenterX - qrDim / 2 + positionXOffset;
             const y = cellCenterY - qrDim / 2 + positionYOffset;
             
-            // Draw QR code
             ctx.drawImage(qrImage, x, y, qrDim, qrDim);
           }
         }
         
-        // LAYER 2: Draw PDF page with transparency (الأمام - البطاقات)
-        ctx.globalAlpha = cardOpacity / 100; // شفافية قابلة للتحكم
+        // LAYER 2: Draw cards with transparency (الأمام)
+        ctx.globalAlpha = debouncedOpacity / 100;
         await page.render({
           canvasContext: ctx,
           viewport: viewport,
         }).promise;
-        ctx.globalAlpha = 1.0; // إعادة الشفافية للطبيعي
+        ctx.globalAlpha = 1.0;
         
       } catch (error) {
         console.error("Preview render error:", error);
@@ -245,7 +280,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
     };
     
     renderPreview();
-  }, [designPdfFile, cols, rows, qrStyle, cardOpacity]); // أضفنا cardOpacity للـ dependencies
+  }, [cols, rows, qrStyle, debouncedOpacity]); // استخدام debouncedOpacity بدلاً من cardOpacity
 
   if (!designPdfFile) {
     return (
@@ -282,10 +317,14 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
             type="range" 
             min="0" 
             max="100" 
+            step="1"
             value={cardOpacity}
             onChange={(e) => setCardOpacity(parseInt(e.target.value))}
-            className="flex-1"
+            className="flex-1 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer opacity-slider"
             data-testid="card-opacity-slider"
+            style={{
+              background: `linear-gradient(to right, #22d3ee ${cardOpacity}%, rgba(255,255,255,0.1) ${cardOpacity}%)`
+            }}
           />
           <span className="text-white/70 text-sm font-mono w-12 text-center">
             {cardOpacity}%
@@ -294,13 +333,27 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         <p className="text-[9px] text-white/30 mt-1">
           {lang === "ar" ? "0% = QR فقط (الخلف) • 100% = البطاقات فقط (الأمام)" : "0% = QR only (back) • 100% = Cards only (front)"}
         </p>
+        {loading && (
+          <div className="mt-2 flex items-center gap-2 text-[10px] text-cyan-300/70">
+            <div className="animate-spin h-3 w-3 border-2 border-cyan-400 border-t-transparent rounded-full"></div>
+            <span>{lang === "ar" ? "جاري التحديث..." : "Updating..."}</span>
+          </div>
+        )}
       </div>
       
-      <div className="bg-white/[0.02] rounded-xl p-2 overflow-auto max-h-96">
+      <div className="bg-white/[0.02] rounded-xl p-2 overflow-auto max-h-96 relative">
+        {loading && (
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-xl flex items-center justify-center z-10">
+            <div className="animate-spin h-8 w-8 border-3 border-cyan-400 border-t-transparent rounded-full"></div>
+          </div>
+        )}
         <canvas 
           ref={canvasRef} 
-          className="w-full h-auto rounded-lg"
-          style={{ imageRendering: "auto" }}
+          className="w-full h-auto rounded-lg transition-opacity duration-200"
+          style={{ 
+            imageRendering: "auto",
+            opacity: loading ? 0.5 : 1
+          }}
         />
       </div>
       <p className="text-[10px] text-white/40 mt-2 text-center">
