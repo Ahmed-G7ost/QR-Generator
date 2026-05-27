@@ -165,12 +165,6 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         
-        // Render PDF page ONCE as background
-        await page.render({
-          canvasContext: ctx,
-          viewport: viewport,
-        }).promise;
-        
         // Calculate grid cell dimensions
         const w = canvas.width;
         const h = canvas.height;
@@ -201,23 +195,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
           qrImage.src = qrDataUrl;
         });
         
-        // Draw grid lines first for reference
-        ctx.strokeStyle = "rgba(34, 211, 238, 0.4)";
-        ctx.lineWidth = 2;
-        for (let row = 0; row <= rows; row++) {
-          ctx.beginPath();
-          ctx.moveTo(0, row * ch);
-          ctx.lineTo(w, row * ch);
-          ctx.stroke();
-        }
-        for (let col = 0; col <= cols; col++) {
-          ctx.beginPath();
-          ctx.moveTo(col * cw, 0);
-          ctx.lineTo(col * cw, h);
-          ctx.stroke();
-        }
-        
-        // Draw QR codes in grid
+        // LAYER 1: Draw QR codes FIRST (background layer)
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
             // Calculate cell center (RTL: reversed column index)
@@ -233,6 +211,30 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
             ctx.drawImage(qrImage, x, y, qrDim, qrDim);
           }
         }
+		// LAYER 2: Draw grid lines for reference
+        ctx.strokeStyle = \"rgba(34, 211, 238, 0.3)\";
+        ctx.lineWidth = 2;
+        for (let row = 0; row <= rows; row++) {
+          ctx.beginPath();
+          ctx.moveTo(0, row * ch);
+          ctx.lineTo(w, row * ch);
+          ctx.stroke();
+        }
+        for (let col = 0; col <= cols; col++) {
+          ctx.beginPath();
+          ctx.moveTo(col * cw, 0);
+          ctx.lineTo(col * cw, h);
+          ctx.stroke();
+        }
+        
+        // LAYER 3: Draw PDF page with transparency on TOP (like front of card)
+        ctx.globalAlpha = 0.7; // 70% opacity to see QR behind
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        }).promise;
+        ctx.globalAlpha = 1.0; // Reset opacity
+        
         
       } catch (error) {
         console.error("Preview render error:", error);
@@ -262,7 +264,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2"/>
             <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
           </svg>
-          {lang === "ar" ? "معاينة مباشرة" : "Live Preview"}
+          {lang === \"ar\" ? \"معاينة مباشرة (طباعة وجهين)\" : \"Live Preview (Double-Sided)\"}
         </h4>
         {loading && (
           <div className="animate-spin h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full"></div>
@@ -276,7 +278,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         />
       </div>
       <p className="text-[10px] text-white/40 mt-2 text-center">
-        {lang === "ar" ? "معاينة الصفحة الأولى - سيتم تطبيق الإعدادات على جميع الصفحات" : "Preview of first page - settings will apply to all pages"}
+        {lang === \"ar\" ? \"البطاقة (أمام) شفافة 70% | QR (خلف) - سيتم تطبيق على جميع الصفحات\" : \"Card (Front) 70% transparent | QR (Back) - applies to all pages\"}
       </p>
     </div>
   );
