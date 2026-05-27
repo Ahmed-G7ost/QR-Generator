@@ -290,11 +290,18 @@ export async function processPdfs({
         ? await qrPdf.embedJpg(item.bytes)
         : await qrPdf.embedPng(item.bytes);
 
-      // Mirror Python coordinates exactly - QR positioned at cell origin to fill entire card
+      // Center QR code within each cell
       const colIdx = index % cols;
       const rowIdx = Math.floor(index / cols);
-      const x = (cols - 1 - colIdx) * cw;
-      const y = h - (rowIdx + 1) * ch;
+      
+      // Calculate cell center position
+      const cellCenterX = (cols - 1 - colIdx) * cw + cw / 2;
+      const cellCenterY = h - (rowIdx + 1) * ch + ch / 2;
+      
+      // Position QR at center of cell
+      const x = cellCenterX - qrDim / 2;
+      const y = cellCenterY - qrDim / 2;
+      
       qrPage.drawImage(pngImage, { x, y, width: qrDim, height: qrDim });
 
       laidOut += 1;
