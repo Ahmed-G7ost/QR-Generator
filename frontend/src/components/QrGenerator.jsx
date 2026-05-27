@@ -400,10 +400,88 @@ export default function QrGenerator({ t, lang }) {
   const [error, setError] = useState("");
   const [cancelled, setCancelled] = useState(false);
   const cancelTokenRef = useRef(null);
+  
+  // Template management
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [savedTemplates, setSavedTemplates] = useState([]);
+  const [showTemplatesList, setShowTemplatesList] = useState(false);
 
   const updateQrStyle = useCallback((key, value) => {
     setQrStyle((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  // Load saved templates on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('qr_templates');
+      if (saved) {
+        setSavedTemplates(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+    }
+  }, []);
+
+  // Save template
+  const handleSaveTemplate = useCallback(() => {
+    if (!templateName.trim()) {
+      alert(lang === "ar" ? "الرجاء إدخال اسم القالب" : "Please enter template name");
+      return;
+    }
+
+    const template = {
+      id: Date.now(),
+      name: templateName.trim(),
+      createdAt: new Date().toISOString(),
+      settings: {
+        server,
+        totalCards,
+        cols,
+        rows,
+        qrStyle,
+        designFileName: designPdfs[0]?.name || null,
+      }
+    };
+
+    const newTemplates = [...savedTemplates, template];
+    setSavedTemplates(newTemplates);
+    localStorage.setItem('qr_templates', JSON.stringify(newTemplates));
+    
+    setShowTemplateModal(false);
+    setTemplateName("");
+    
+    alert(lang === "ar" ? "تم حفظ القالب بنجاح!" : "Template saved successfully!");
+  }, [templateName, server, totalCards, cols, rows, qrStyle, designPdfs, savedTemplates, lang]);
+
+  // Load template
+  const handleLoadTemplate = useCallback((template) => {
+    const settings = template.settings;
+    setServer(settings.server || "");
+    setTotalCards(settings.totalCards || 8);
+    setCols(settings.cols || 2);
+    setRows(settings.rows || 4);
+    setQrStyle(settings.qrStyle || { ...DEFAULT_QR_STYLE });
+    
+    setShowTemplatesList(false);
+    
+    if (settings.designFileName) {
+      alert(
+        lang === "ar" 
+          ? `تم تحميل القالب "${template.name}"\nالرجاء رفع ملف التصميم: ${settings.designFileName}`
+          : `Template "${template.name}" loaded\nPlease upload design file: ${settings.designFileName}`
+      );
+    }
+  }, [lang]);
+
+  // Delete template
+  const handleDeleteTemplate = useCallback((templateId) => {
+    if (window.confirm(lang === "ar" ? "هل تريد حذف هذا القالب؟" : "Delete this template?")) {
+      const newTemplates = savedTemplates.filter(t => t.id !== templateId);
+      setSavedTemplates(newTemplates);
+      localStorage.setItem('qr_templates', JSON.stringify(newTemplates));
+    }
+  }, [savedTemplates, lang]);
 
   // Append new source PDFs (don't replace)
   const addSourcePdfs = useCallback((newFiles) => {
@@ -465,6 +543,98 @@ export default function QrGenerator({ t, lang }) {
 
   return (
     <div className="space-y-8">
+      {/* Template Save Modal */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowTemplateModal(false)}>
+          <div className="bg-[#0d0d18] border border-white/10 rounded-2xl p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-4">
+              {lang === "ar" ? "حفظ القالب" : "Save Template"}
+            </h3>
+            <input
+              type="text"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              placeholder={lang === "ar" ? "اسم القالب..." : "Template name..."}
+              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white mb-4 focus:outline-none focus:border-cyan-400/50"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveTemplate}
+                className="flex-1 bg-gradient-to-r from-violet-500 to-cyan-400 text-white font-semibold py-2 rounded-xl hover:opacity-90 transition"
+              >
+                {lang === "ar" ? "حفظ" : "Save"}
+              </button>
+              <button
+                onClick={() => { setShowTemplateModal(false); setTemplateName(""); }}
+                className="flex-1 bg-white/5 text-white/70 font-semibold py-2 rounded-xl hover:bg-white/10 transition"
+              >
+                {lang === "ar" ? "إلغاء" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Templates List Modal */}
+      {showTemplatesList && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowTemplatesList(false)}>
+          <div className="bg-[#0d0d18] border border-white/10 rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">
+                {lang === "ar" ? "القوالب المحفوظة" : "Saved Templates"}
+              </h3>
+              <button onClick={() => setShowTemplatesList(false)} className="text-white/50 hover:text-white">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            
+            {savedTemplates.length === 0 ? (
+              <p className="text-white/40 text-center py-8">
+                {lang === "ar" ? "لا توجد قوالب محفوظة" : "No saved templates"}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {savedTemplates.map((template) => (
+                  <div key={template.id} className="bg-white/[0.02] border border-white/10 rounded-xl p-4 hover:bg-white/[0.04] transition">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-white font-semibold mb-1">{template.name}</h4>
+                        <div className="text-xs text-white/50 space-y-0.5">
+                          <p>{lang === "ar" ? "الخادم:" : "Server:"} {template.settings.server || "-"}</p>
+                          <p>{lang === "ar" ? "الشبكة:" : "Grid:"} {template.settings.cols}×{template.settings.rows}</p>
+                          <p className="text-[10px] text-white/30">
+                            {new Date(template.createdAt).toLocaleDateString(lang === "ar" ? "ar-SA" : "en-US")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleLoadTemplate(template)}
+                          className="px-4 py-2 bg-cyan-400/15 border border-cyan-400/40 text-cyan-200 rounded-lg hover:bg-cyan-400/25 transition text-sm font-semibold"
+                        >
+                          {lang === "ar" ? "تحميل" : "Load"}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          className="px-3 py-2 bg-rose-400/15 border border-rose-400/40 text-rose-300 rounded-lg hover:bg-rose-400/25 transition"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Feature row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
@@ -490,7 +660,38 @@ export default function QrGenerator({ t, lang }) {
                 <span className="h-6 w-1 rounded-full bg-gradient-to-b from-violet-400 to-cyan-400" />
                 <h2 className="text-lg font-bold tracking-wide uppercase text-white/80">1 — PDF Files</h2>
               </div>
-              {sourcePdf && designPdf && <span className="text-xs text-emerald-300/80">● Ready</span>}
+              <div className="flex items-center gap-2">
+                {/* Template Buttons */}
+                <button
+                  onClick={() => setShowTemplatesList(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-white/[0.03] border border-white/10 rounded-xl hover:bg-white/[0.06] transition text-xs font-semibold text-white/70"
+                  title={lang === "ar" ? "القوالب المحفوظة" : "Saved Templates"}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" strokeWidth="2"/>
+                  </svg>
+                  {savedTemplates.length > 0 && (
+                    <span className="bg-cyan-400/20 text-cyan-300 px-1.5 py-0.5 rounded text-[10px]">
+                      {savedTemplates.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowTemplateModal(true)}
+                  disabled={!designPdfs.length || !server}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-400/15 border border-emerald-400/40 text-emerald-200 rounded-xl hover:bg-emerald-400/25 transition text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={lang === "ar" ? "حفظ القالب" : "Save Template"}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" strokeWidth="2"/>
+                    <circle cx="12" cy="12" r="1" fill="currentColor"/>
+                  </svg>
+                  {lang === "ar" ? "حفظ" : "Save"}
+                </button>
+                {sourcePdf && designPdf && <span className="text-xs text-emerald-300/80">● Ready</span>}
+              </div>
             </div>
             <div className="space-y-4">
               <Dropzone title={t.stepData} hint={t.stepDataHint} files={sourcePdfs} onFiles={addSourcePdfs} onRemove={removeSourcePdf} t={t} testId="source-pdf-dropzone" accent="from-violet-500 to-fuchsia-500" disabled={processing} multiple={true} />
