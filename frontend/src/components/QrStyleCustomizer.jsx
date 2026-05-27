@@ -236,8 +236,9 @@ export function drawStyledQr(ctx, qrData, opts) {
       }
     }
 
-    // Draw data modules
+    // Draw data modules with darker fill (full opacity)
     ctx.fillStyle = fillStyle;
+    ctx.globalAlpha = 1.0; // Ensure full opacity for darker appearance
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (!modules.get(r, c)) continue;

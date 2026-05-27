@@ -26,9 +26,12 @@ async function renderQrPng(text, width) {
 
   const canvas = new OffscreenCanvas(finalPx, finalPx);
   const ctx = canvas.getContext("2d");
+  // White background
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, finalPx, finalPx);
-  ctx.fillStyle = "#000000";
+  // Pure black (غامق) for QR modules - with full opacity
+  ctx.fillStyle = "rgba(0, 0, 0, 1)";
+  ctx.globalAlpha = 1.0; // ensure full opacity for darker appearance
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (modules.get(r, c)) {

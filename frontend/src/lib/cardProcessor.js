@@ -66,11 +66,12 @@ async function generateQrPng(text, config, logoImgEl, fgImgEl) {
   }
 
   // Fallback: original tiny PNG for zero-customization (smallest file)
+  // Using pure black (rgba(0,0,0,1)) for darker appearance
   const dataUrl = await QRCode.toDataURL(text, {
     errorCorrectionLevel: "M",
     margin: 1,
     width: 100,
-    color: { dark: "#000000", light: "#ffffff" },
+    color: { dark: "rgba(0, 0, 0, 1)", light: "#ffffff" },
   });
   const base64 = dataUrl.split(",")[1];
   const binary = atob(base64);
@@ -316,14 +317,29 @@ export async function generateCardsPdf({
         if (qrData) {
           const qrImg = await getQrImage(qrData);
           const qrSizePct = Number(config.qr_size || 25);
-          const qrDim = Math.min(drawW, drawH) * qrSizePct / 100;
+          
+          // Improved QR sizing: use smaller dimension and ensure it fits properly
+          // within the card boundaries without overflow or excessive margins
+          const maxQrDim = Math.min(drawW, drawH) * 0.95; // 95% of smaller dimension
+          let qrDim = Math.min(drawW, drawH) * qrSizePct / 100;
+          
+          // Ensure QR doesn't exceed card boundaries
+          qrDim = Math.min(qrDim, maxQrDim);
+          
+          // Calculate center position with proper bounds checking
           const { x: qrCx, y: qrCy } = pctToPdf(
             config.qr_x ?? 50, config.qr_y ?? 75,
             dx, dy, drawW, drawH,
           );
+          
+          // Ensure QR stays within card boundaries
+          const halfQr = qrDim / 2;
+          const finalX = Math.max(dx + halfQr, Math.min(qrCx - halfQr, dx + drawW - qrDim));
+          const finalY = Math.max(dy + halfQr, Math.min(qrCy - halfQr, dy + drawH - qrDim));
+          
           page.drawImage(qrImg, {
-            x: qrCx - qrDim / 2,
-            y: qrCy - qrDim / 2,
+            x: finalX,
+            y: finalY,
             width: qrDim,
             height: qrDim,
           });
