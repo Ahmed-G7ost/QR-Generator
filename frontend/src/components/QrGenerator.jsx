@@ -143,6 +143,7 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
 const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
   const canvasRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [cardOpacity, setCardOpacity] = useState(40); // نسبة شفافية البطاقات (0-100)
 
   useEffect(() => {
     if (!designPdfFile) return;
@@ -164,12 +165,6 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         const viewport = page.getViewport({ scale: 2 });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        
-        // Render PDF page ONCE as background
-        await page.render({
-          canvasContext: ctx,
-          viewport: viewport,
-        }).promise;
         
         // Calculate grid cell dimensions
         const w = canvas.width;
@@ -217,7 +212,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
           ctx.stroke();
         }
         
-        // Draw QR codes in grid
+        // LAYER 1: Draw QR codes in grid (الخلف - QR)
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
             // Calculate cell center (RTL: reversed column index)
@@ -234,6 +229,14 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
           }
         }
         
+        // LAYER 2: Draw PDF page with transparency (الأمام - البطاقات)
+        ctx.globalAlpha = cardOpacity / 100; // شفافية قابلة للتحكم
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        }).promise;
+        ctx.globalAlpha = 1.0; // إعادة الشفافية للطبيعي
+        
       } catch (error) {
         console.error("Preview render error:", error);
       } finally {
@@ -242,7 +245,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
     };
     
     renderPreview();
-  }, [designPdfFile, cols, rows, qrStyle]);
+  }, [designPdfFile, cols, rows, qrStyle, cardOpacity]); // أضفنا cardOpacity للـ dependencies
 
   if (!designPdfFile) {
     return (
@@ -268,6 +271,31 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
           <div className="animate-spin h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full"></div>
         )}
       </div>
+      
+      {/* التحكم في شفافية البطاقات */}
+      <div className="mb-3 p-3 rounded-xl bg-white/[0.03] border border-white/10">
+        <label className="text-[11px] uppercase tracking-[0.15em] text-white/50 font-medium block mb-2">
+          {lang === "ar" ? "شفافية البطاقات (الأمام)" : "Card Opacity (Front)"}
+        </label>
+        <div className="flex items-center gap-3">
+          <input 
+            type="range" 
+            min="0" 
+            max="100" 
+            value={cardOpacity}
+            onChange={(e) => setCardOpacity(parseInt(e.target.value))}
+            className="flex-1"
+            data-testid="card-opacity-slider"
+          />
+          <span className="text-white/70 text-sm font-mono w-12 text-center">
+            {cardOpacity}%
+          </span>
+        </div>
+        <p className="text-[9px] text-white/30 mt-1">
+          {lang === "ar" ? "0% = QR فقط (الخلف) • 100% = البطاقات فقط (الأمام)" : "0% = QR only (back) • 100% = Cards only (front)"}
+        </p>
+      </div>
+      
       <div className="bg-white/[0.02] rounded-xl p-2 overflow-auto max-h-96">
         <canvas 
           ref={canvasRef} 
@@ -276,7 +304,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         />
       </div>
       <p className="text-[10px] text-white/40 mt-2 text-center">
-        {lang === "ar" ? "معاينة الصفحة الأولى - سيتم تطبيق الإعدادات على جميع الصفحات" : "Preview of first page - settings will apply to all pages"}
+        {lang === "ar" ? "معاينة طبقات: QR في الخلف (واضح) + البطاقات في الأمام (شفاف)" : "Layered preview: QR in back (solid) + Cards in front (transparent)"}
       </p>
     </div>
   );
@@ -631,4 +659,3 @@ export default function QrGenerator({ t, lang }) {
     </div>
   );
 }
-
