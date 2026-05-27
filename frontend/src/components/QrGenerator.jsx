@@ -165,7 +165,7 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         
-        // Render PDF page
+        // Render PDF page ONCE as background
         await page.render({
           canvasContext: ctx,
           viewport: viewport,
@@ -201,6 +201,22 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
           qrImage.src = qrDataUrl;
         });
         
+        // Draw grid lines first for reference
+        ctx.strokeStyle = "rgba(34, 211, 238, 0.4)";
+        ctx.lineWidth = 2;
+        for (let row = 0; row <= rows; row++) {
+          ctx.beginPath();
+          ctx.moveTo(0, row * ch);
+          ctx.lineTo(w, row * ch);
+          ctx.stroke();
+        }
+        for (let col = 0; col <= cols; col++) {
+          ctx.beginPath();
+          ctx.moveTo(col * cw, 0);
+          ctx.lineTo(col * cw, h);
+          ctx.stroke();
+        }
+        
         // Draw QR codes in grid
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -215,11 +231,6 @@ const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
             
             // Draw QR code
             ctx.drawImage(qrImage, x, y, qrDim, qrDim);
-            
-            // Draw grid lines for reference
-            ctx.strokeStyle = "rgba(34, 211, 238, 0.3)";
-            ctx.lineWidth = 1;
-            ctx.strokeRect(colIdx * cw, row * ch, cw, ch);
           }
         }
         
