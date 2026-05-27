@@ -275,7 +275,14 @@ export async function processPdfs({
   const h = A4_HEIGHT;
   const cw = w / cols;
   const ch = h / rows;
-  const qrDim = Math.min(cw, ch); // QR fills the full card cell (100%)
+  
+  // Get QR size from qrStyle (default 100% if not specified)
+  const qrSizePercent = (qrStyle?.qr_size || 100) / 100;
+  const qrDim = Math.min(cw, ch) * qrSizePercent;
+  
+  // Get position offsets from qrStyle (default 0 if not specified)
+  const positionXOffset = ((qrStyle?.qr_position_x || 0) / 100) * cw;
+  const positionYOffset = ((qrStyle?.qr_position_y || 0) / 100) * ch;
 
   let laidOut = 0;
   for (let i = 0; i < totalItems; i += totalCards) {
@@ -298,9 +305,9 @@ export async function processPdfs({
       const cellCenterX = (cols - 1 - colIdx) * cw + cw / 2;
       const cellCenterY = h - (rowIdx + 1) * ch + ch / 2;
       
-      // Position QR at center of cell
-      const x = cellCenterX - qrDim / 2;
-      const y = cellCenterY - qrDim / 2;
+      // Position QR at center of cell with custom offsets
+      const x = cellCenterX - qrDim / 2 + positionXOffset;
+      const y = cellCenterY - qrDim / 2 + positionYOffset;
       
       qrPage.drawImage(pngImage, { x, y, width: qrDim, height: qrDim });
 
