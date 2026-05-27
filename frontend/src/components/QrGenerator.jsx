@@ -7,6 +7,10 @@ import {
   isCancelledError,
 } from "@/lib/pdfProcessor";
 import QrStyleCustomizer from "@/components/QrStyleCustomizer";
+import * as pdfjsLib from "pdfjs-dist/build/pdf";
+import QRCode from "qrcode";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.worker.min.js`;
 
 /* ----------------------------- File drop zone ----------------------------- */
 const Dropzone = ({ title, hint, files, onFiles, onRemove, t, testId, accent, disabled, multiple = false }) => {
@@ -131,6 +135,138 @@ const PhaseStepper = ({ t, currentPhase, completed }) => {
           </div>
         );
       })}
+    </div>
+  );
+};
+
+/* ---------------------------- Live Preview Component --------------------------- */
+const QrLivePreview = ({ designPdfFile, cols, rows, qrStyle, lang }) => {
+  const canvasRef = useRef(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!designPdfFile) return;
+    
+    const renderPreview = async () => {
+      setLoading(true);
+      try {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext("2d");
+        
+        // Load first page of design PDF
+        const arrayBuffer = await designPdfFile.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        
+        // Set canvas size to A4 proportions
+        const viewport = page.getViewport({ scale: 2 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        // Render PDF page
+        await page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        }).promise;
+        
+        // Calculate grid cell dimensions
+        const w = canvas.width;
+        const h = canvas.height;
+        const cw = w / cols;
+        const ch = h / rows;
+        
+        // Calculate QR dimensions
+        const qrSizePercent = (qrStyle?.qr_size || 100) / 100;
+        const qrDim = Math.min(cw, ch) * qrSizePercent;
+        
+        // Calculate position offsets
+        const positionXOffset = ((qrStyle?.qr_position_x || 0) / 100) * cw;
+        const positionYOffset = ((qrStyle?.qr_position_y || 0) / 100) * ch;
+        
+        // Generate sample QR code
+        const qrDataUrl = await QRCode.toDataURL("SAMPLE-QR-123456", {
+          errorCorrectionLevel: "M",
+          margin: 1,
+          width: 200,
+          color: { dark: "#000000", light: "#ffffff" },
+        });
+        
+        // Load QR image
+        const qrImage = new Image();
+        await new Promise((resolve, reject) => {
+          qrImage.onload = resolve;
+          qrImage.onerror = reject;
+          qrImage.src = qrDataUrl;
+        });
+        
+        // Draw QR codes in grid
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            // Calculate cell center (RTL: reversed column index)
+            const colIdx = cols - 1 - col;
+            const cellCenterX = colIdx * cw + cw / 2;
+            const cellCenterY = row * ch + ch / 2;
+            
+            // Position QR at center with custom offsets
+            const x = cellCenterX - qrDim / 2 + positionXOffset;
+            const y = cellCenterY - qrDim / 2 + positionYOffset;
+            
+            // Draw QR code
+            ctx.drawImage(qrImage, x, y, qrDim, qrDim);
+            
+            // Draw grid lines for reference
+            ctx.strokeStyle = "rgba(34, 211, 238, 0.3)";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(colIdx * cw, row * ch, cw, ch);
+          }
+        }
+        
+      } catch (error) {
+        console.error("Preview render error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    renderPreview();
+  }, [designPdfFile, cols, rows, qrStyle]);
+
+  if (!designPdfFile) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 flex items-center justify-center h-64">
+        <p className="text-white/40 text-sm">
+          {lang === "ar" ? "قم برفع ملف التصميم لرؤية المعاينة" : "Upload design file to see preview"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[11px] uppercase tracking-[0.2em] text-cyan-300/80 font-semibold flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2"/>
+            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+          {lang === "ar" ? "معاينة مباشرة" : "Live Preview"}
+        </h4>
+        {loading && (
+          <div className="animate-spin h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full"></div>
+        )}
+      </div>
+      <div className="bg-white/[0.02] rounded-xl p-2 overflow-auto max-h-96">
+        <canvas 
+          ref={canvasRef} 
+          className="w-full h-auto rounded-lg"
+          style={{ imageRendering: "auto" }}
+        />
+      </div>
+      <p className="text-[10px] text-white/40 mt-2 text-center">
+        {lang === "ar" ? "معاينة الصفحة الأولى - سيتم تطبيق الإعدادات على جميع الصفحات" : "Preview of first page - settings will apply to all pages"}
+      </p>
     </div>
   );
 };
@@ -269,6 +405,15 @@ export default function QrGenerator({ t, lang }) {
               <Dropzone title={t.stepDesign} hint={t.stepDesignHint} files={designPdfs} onFiles={setDesignPdfs} t={t} testId="design-pdf-dropzone" accent="from-cyan-500 to-emerald-500" disabled={processing} multiple={false} />
             </div>
           </div>
+
+          {/* Live Preview */}
+          <QrLivePreview 
+            designPdfFile={designPdfs[0]} 
+            cols={parseInt(cols, 10)} 
+            rows={parseInt(rows, 10)} 
+            qrStyle={qrStyle}
+            lang={lang}
+          />
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8">
             <h3 className="text-xs uppercase tracking-[0.25em] text-white/40 mb-4">{t.aboutTitle}</h3>
