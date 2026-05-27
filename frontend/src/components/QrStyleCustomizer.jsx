@@ -55,7 +55,7 @@ export function drawStyledQr(ctx, qrData, opts) {
   const qr = QRCode.create(qrData || "SAMPLE", { errorCorrectionLevel: (hasLogo || hasFgImage) ? "H" : "M" });
   const modules = qr.modules;
   const size = modules.size;
-  const margin = 4; // QR standard requires 4-module quiet zone for reliable scanning
+  const margin = 1; // Reduced margin for better fit (was 4, now 1 for tighter spacing)
   const total = size + margin * 2;
   const cellW = width / total;
   const cellH = height / total;

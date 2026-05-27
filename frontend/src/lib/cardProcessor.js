@@ -69,7 +69,7 @@ async function generateQrPng(text, config, logoImgEl, fgImgEl) {
   // Using pure black (rgba(0,0,0,1)) for darker appearance
   const dataUrl = await QRCode.toDataURL(text, {
     errorCorrectionLevel: "M",
-    margin: 1,
+    margin: 0, // Minimal margin for tight fit
     width: 100,
     color: { dark: "rgba(0, 0, 0, 1)", light: "#ffffff" },
   });
@@ -318,24 +318,23 @@ export async function generateCardsPdf({
           const qrImg = await getQrImage(qrData);
           const qrSizePct = Number(config.qr_size || 25);
           
-          // Improved QR sizing: use smaller dimension and ensure it fits properly
-          // within the card boundaries without overflow or excessive margins
-          const maxQrDim = Math.min(drawW, drawH) * 0.95; // 95% of smaller dimension
+          // Calculate QR size to fill the available space without gaps
+          // Use 98% of smaller dimension to ensure perfect fit
           let qrDim = Math.min(drawW, drawH) * qrSizePct / 100;
           
-          // Ensure QR doesn't exceed card boundaries
+          // Ensure QR fits perfectly within card boundaries (98% fill, 2% padding)
+          const maxQrDim = Math.min(drawW, drawH) * 0.98;
           qrDim = Math.min(qrDim, maxQrDim);
           
-          // Calculate center position with proper bounds checking
+          // Calculate center position
           const { x: qrCx, y: qrCy } = pctToPdf(
             config.qr_x ?? 50, config.qr_y ?? 75,
             dx, dy, drawW, drawH,
           );
           
-          // Ensure QR stays within card boundaries
-          const halfQr = qrDim / 2;
-          const finalX = Math.max(dx + halfQr, Math.min(qrCx - halfQr, dx + drawW - qrDim));
-          const finalY = Math.max(dy + halfQr, Math.min(qrCy - halfQr, dy + drawH - qrDim));
+          // Center QR perfectly with minimal margins
+          const finalX = qrCx - qrDim / 2;
+          const finalY = qrCy - qrDim / 2;
           
           page.drawImage(qrImg, {
             x: finalX,

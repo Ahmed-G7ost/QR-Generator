@@ -16,7 +16,7 @@ async function renderQrPng(text, width) {
   const qr = QRCode.create(text, { errorCorrectionLevel: "M" });
   const modules = qr.modules;
   const size = modules.size; // number of QR cells per row
-  const margin = 1; // quiet-zone in cells (same as toDataURL default)
+  const margin = 0; // Minimal margin for tight fit (reduced from 1)
   const total = size + margin * 2;
 
   // 2) Pick a pixel-perfect canvas size: floor(width/total)*total avoids
