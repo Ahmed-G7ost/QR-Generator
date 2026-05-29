@@ -245,16 +245,105 @@ export function drawStyledQr(ctx, qrData, opts) {
         if (isFinderCell(r, c)) continue;
         const cx = x + (c + margin) * cellW;
         const cy = y + (r + margin) * cellH;
+        const centerX = cx + cellW / 2;
+        const centerY = cy + cellH / 2;
+        
         if (dotStyle === "dots") {
           ctx.beginPath();
-          ctx.arc(cx + cellW / 2, cy + cellH / 2, cellW * 0.48, 0, Math.PI * 2);
+          ctx.arc(centerX, centerY, cellW * 0.48, 0, Math.PI * 2);
           ctx.fill();
         } else if (dotStyle === "rounded") {
           const rr = cellW * 0.35;
           ctx.beginPath();
           ctx.roundRect(cx + cellW * 0.05, cy + cellH * 0.05, cellW * 0.9, cellH * 0.9, rr);
           ctx.fill();
+        } else if (dotStyle === "diamond") {
+          // شكل ماسي احترافي
+          ctx.beginPath();
+          ctx.moveTo(centerX, cy + cellH * 0.05);
+          ctx.lineTo(cx + cellW * 0.95, centerY);
+          ctx.lineTo(centerX, cy + cellH * 0.95);
+          ctx.lineTo(cx + cellW * 0.05, centerY);
+          ctx.closePath();
+          ctx.fill();
+        } else if (dotStyle === "leaf") {
+          // شكل ورقة عضوي
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(Math.PI / 4);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, cellW * 0.45, cellH * 0.32, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        } else if (dotStyle === "heart") {
+          // شكل قلب احترافي
+          const size = cellW * 0.4;
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.beginPath();
+          ctx.moveTo(0, size * 0.3);
+          ctx.bezierCurveTo(-size * 0.5, -size * 0.3, -size * 0.9, size * 0.1, 0, size * 0.8);
+          ctx.bezierCurveTo(size * 0.9, size * 0.1, size * 0.5, -size * 0.3, 0, size * 0.3);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (dotStyle === "star") {
+          // شكل نجمة خماسية
+          const outerRadius = cellW * 0.45;
+          const innerRadius = cellW * 0.2;
+          ctx.beginPath();
+          for (let i = 0; i < 5; i++) {
+            const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+            const x1 = centerX + Math.cos(angle) * outerRadius;
+            const y1 = centerY + Math.sin(angle) * outerRadius;
+            if (i === 0) ctx.moveTo(x1, y1);
+            else ctx.lineTo(x1, y1);
+            const angle2 = angle + (2 * Math.PI) / 5;
+            const x2 = centerX + Math.cos(angle2) * innerRadius;
+            const y2 = centerY + Math.sin(angle2) * innerRadius;
+            ctx.lineTo(x2, y2);
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else if (dotStyle === "hexagon") {
+          // شكل سداسي هندسي
+          const radius = cellW * 0.45;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const hx = centerX + Math.cos(angle) * radius;
+            const hy = centerY + Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else if (dotStyle === "fluid") {
+          // شكل انسيابي حديث
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.beginPath();
+          const sides = 8;
+          const baseRadius = cellW * 0.38;
+          for (let i = 0; i <= sides; i++) {
+            const angle = (i * 2 * Math.PI) / sides;
+            const wave = Math.sin(i * 2) * cellW * 0.08;
+            const radius = baseRadius + wave;
+            const px = Math.cos(angle) * radius;
+            const py = Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (dotStyle === "minimal") {
+          // شكل بسيط احترافي - دائرة صغيرة
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, cellW * 0.35, 0, Math.PI * 2);
+          ctx.fill();
         } else {
+          // square - default
           ctx.fillRect(cx, cy, cellW, cellH);
         }
       }
@@ -513,6 +602,13 @@ export default function QrStyleCustomizer({ config, updateConfig, t, compact = f
                 { value: "square", label: t.qrDotSquare },
                 { value: "dots", label: t.qrDotDots },
                 { value: "rounded", label: t.qrDotRounded },
+                { value: "diamond", label: t.qrDotDiamond },
+                { value: "leaf", label: t.qrDotLeaf },
+                { value: "heart", label: t.qrDotHeart },
+                { value: "star", label: t.qrDotStar },
+                { value: "hexagon", label: t.qrDotHexagon },
+                { value: "fluid", label: t.qrDotFluid },
+                { value: "minimal", label: t.qrDotMinimal },
               ].map((opt) => (
                 <button key={opt.value} data-testid={`qr-dot-${opt.value}`}
                   onClick={() => updateConfig("qr_dot_style", opt.value)}
