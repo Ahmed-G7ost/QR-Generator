@@ -215,6 +215,8 @@ export function drawStyledQr(ctx, qrData, opts) {
       const centerFx = fx + fw / 2;
       const centerFy = fy + fh / 2;
 
+      // حفظ الحالة قبل رسم كل عين
+      ctx.save();
       ctx.fillStyle = realEyeColor;
       
       if (dotStyle === "dots" || dotStyle === "minimal") {
@@ -350,11 +352,14 @@ export function drawStyledQr(ctx, qrData, opts) {
         ctx.fillStyle = realEyeColor;
         ctx.fillRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4);
       }
+      
+      // استعادة الحالة بعد رسم كل عين
+      ctx.restore();
     }
 
-    // Draw data modules with darker fill (full opacity)
+    // إعادة تعيين التدرج اللوني للنقاط
     ctx.fillStyle = fillStyle;
-    ctx.globalAlpha = 1.0; // Ensure full opacity for darker appearance
+    ctx.globalAlpha = 1.0;
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (!modules.get(r, c)) continue;
