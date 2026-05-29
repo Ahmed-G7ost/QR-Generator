@@ -206,28 +206,144 @@ export function drawStyledQr(ctx, qrData, opts) {
 
     const realEyeColor = eyeColor || (useGradient ? gradientColor1 : fgColor);
 
-    // Draw finder patterns
+    // Draw finder patterns (العيون الثلاثة)
     for (const fp of finderPositions) {
       const fx = x + (fp.c + margin) * cellW;
       const fy = y + (fp.r + margin) * cellH;
       const fw = cellW * 7;
       const fh = cellH * 7;
+      const centerFx = fx + fw / 2;
+      const centerFy = fy + fh / 2;
 
       ctx.fillStyle = realEyeColor;
-      if (dotStyle === "dots") {
-        ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2, 0, Math.PI * 2); ctx.fill();
+      
+      if (dotStyle === "dots" || dotStyle === "minimal") {
+        // دوائر متداخلة
+        ctx.beginPath(); 
+        ctx.arc(centerFx, centerFy, fw / 2, 0, Math.PI * 2); 
+        ctx.fill();
         ctx.fillStyle = bgColor;
-        ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, fw / 2 - cellW, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); 
+        ctx.arc(centerFx, centerFy, fw / 2 - cellW, 0, Math.PI * 2); 
+        ctx.fill();
         ctx.fillStyle = realEyeColor;
-        ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, cellW * 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); 
+        ctx.arc(centerFx, centerFy, cellW * 1.5, 0, Math.PI * 2); 
+        ctx.fill();
       } else if (dotStyle === "rounded") {
+        // مربعات مدورة
         const rr = cellW * 0.8;
-        ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, rr); ctx.fill();
+        ctx.beginPath(); 
+        ctx.roundRect(fx, fy, fw, fh, rr); 
+        ctx.fill();
         ctx.fillStyle = bgColor;
-        ctx.beginPath(); ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, rr * 0.6); ctx.fill();
+        ctx.beginPath(); 
+        ctx.roundRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2, rr * 0.6); 
+        ctx.fill();
         ctx.fillStyle = realEyeColor;
-        ctx.beginPath(); ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, rr * 0.4); ctx.fill();
+        ctx.beginPath(); 
+        ctx.roundRect(fx + cellW * 2, fy + cellH * 2, fw - cellW * 4, fh - cellH * 4, rr * 0.4); 
+        ctx.fill();
+      } else if (dotStyle === "diamond") {
+        // معين متداخل
+        // Outer diamond
+        ctx.beginPath();
+        ctx.moveTo(centerFx, fy);
+        ctx.lineTo(fx + fw, centerFy);
+        ctx.lineTo(centerFx, fy + fh);
+        ctx.lineTo(fx, centerFy);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Middle gap (white)
+        ctx.fillStyle = bgColor;
+        const gapSize = cellW * 1;
+        ctx.beginPath();
+        ctx.moveTo(centerFx, fy + gapSize);
+        ctx.lineTo(fx + fw - gapSize, centerFy);
+        ctx.lineTo(centerFx, fy + fh - gapSize);
+        ctx.lineTo(fx + gapSize, centerFy);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Inner diamond
+        ctx.fillStyle = realEyeColor;
+        const innerSize = cellW * 2;
+        ctx.beginPath();
+        ctx.moveTo(centerFx, fy + innerSize);
+        ctx.lineTo(fx + fw - innerSize, centerFy);
+        ctx.lineTo(centerFx, fy + fh - innerSize);
+        ctx.lineTo(fx + innerSize, centerFy);
+        ctx.closePath();
+        ctx.fill();
+      } else if (dotStyle === "hexagon") {
+        // سداسي متداخل
+        const drawHexagon = (cx, cy, radius) => {
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3;
+            const hx = cx + Math.cos(angle) * radius;
+            const hy = cy + Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath();
+          ctx.fill();
+        };
+        
+        // Outer hexagon
+        drawHexagon(centerFx, centerFy, fw / 2);
+        
+        // Middle gap
+        ctx.fillStyle = bgColor;
+        drawHexagon(centerFx, centerFy, fw / 2 - cellW);
+        
+        // Inner hexagon
+        ctx.fillStyle = realEyeColor;
+        drawHexagon(centerFx, centerFy, cellW * 1.5);
+      } else if (dotStyle === "fluid") {
+        // شكل انسيابي متداخل
+        const drawFluidShape = (cx, cy, baseRadius) => {
+          ctx.beginPath();
+          const sides = 8;
+          for (let i = 0; i <= sides; i++) {
+            const angle = (i * 2 * Math.PI) / sides;
+            const wave = Math.sin(i * 2) * cellW * 0.3;
+            const radius = baseRadius + wave;
+            const px = cx + Math.cos(angle) * radius;
+            const py = cy + Math.sin(angle) * radius;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        };
+        
+        // Outer fluid
+        drawFluidShape(centerFx, centerFy, fw / 2);
+        
+        // Middle gap
+        ctx.fillStyle = bgColor;
+        drawFluidShape(centerFx, centerFy, fw / 2 - cellW);
+        
+        // Inner fluid
+        ctx.fillStyle = realEyeColor;
+        drawFluidShape(centerFx, centerFy, cellW * 1.5);
+      } else if (dotStyle === "leaf") {
+        // ورقة بشكل دائري للعيون (للحفاظ على القراءة)
+        ctx.beginPath(); 
+        ctx.arc(centerFx, centerFy, fw / 2, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.fillStyle = bgColor;
+        ctx.beginPath(); 
+        ctx.arc(centerFx, centerFy, fw / 2 - cellW, 0, Math.PI * 2); 
+        ctx.fill();
+        ctx.fillStyle = realEyeColor;
+        ctx.beginPath(); 
+        ctx.arc(centerFx, centerFy, cellW * 1.5, 0, Math.PI * 2); 
+        ctx.fill();
       } else {
+        // مربع عادي (square, heart, star - للحفاظ على القراءة)
         ctx.fillRect(fx, fy, fw, fh);
         ctx.fillStyle = bgColor;
         ctx.fillRect(fx + cellW, fy + cellH, fw - cellW * 2, fh - cellH * 2);
