@@ -143,20 +143,19 @@ export default function ActivationGate({ onActivated, lang = "ar", onToggleLang 
         secured: "مشفر ومحمي · Firebase Auth",
         langBtn: "English",
         noAccount: "لا تملك حساباً؟ تواصل مع الدعم",
-        subBadge: "عرض حصري",
-        subTitle: "اشتراك مدى الحياة",
-        subSubtitle: "دفعة واحدة فقط، استخدم البرنامج بكامل ميزاته للأبد",
-        priceCurrency: "₪",
-        priceAmount: "20",
-        priceNote: "دفعة واحدة · بدون رسوم متكررة",
-        subscribeBtn: "اطلب الاشتراك عبر واتساب",
+        subBadge: "ادعمنا",
+        subTitle: "الدعم المادي",
+        subSubtitle: "ساهم في تطوير وتحسين البرنامج",
+        supportNumber: "0598357971",
+        supportNote: "يمكنك الدعم عبر",
+        supportMethods: ["جوال باي", "مالشات"],
         subFeatures: [
-          "إنشاء رموز QR غير محدودة",
-          "معالجة ملفات PDF و CSV",
-          "بطاقات مخصصة بتصاميم متعددة",
-          "جميع التحديثات المستقبلية مجاناً",
-          "دعم فني مباشر عبر واتساب",
-          "بدون اشتراك شهري أو متكرر",
+          "دعمك يساعدنا في تطوير ميزات جديدة",
+          "تحسين الأداء والاستقرار",
+          "إضافة المزيد من التصاميم",
+          "توفير دعم فني أفضل",
+          "تحديثات مستمرة ومجانية",
+          "مجتمع داعم ومتطور",
         ],
         orDivider: "أو",
       }
@@ -180,20 +179,19 @@ export default function ActivationGate({ onActivated, lang = "ar", onToggleLang 
         secured: "Encrypted & Secured · Firebase Auth",
         langBtn: "العربية",
         noAccount: "No account? Contact support",
-        subBadge: "Exclusive Offer",
-        subTitle: "Lifetime Subscription",
-        subSubtitle: "One-time payment, use the full software forever",
-        priceCurrency: "₪",
-        priceAmount: "20",
-        priceNote: "One-time · No recurring fees",
-        subscribeBtn: "Subscribe via WhatsApp",
+        subBadge: "Support Us",
+        subTitle: "Financial Support",
+        subSubtitle: "Help us develop and improve the software",
+        supportNumber: "0598357971",
+        supportNote: "You can support via",
+        supportMethods: ["Jawwal Pay", "Malshat"],
         subFeatures: [
-          "Unlimited QR code generation",
-          "PDF & CSV file processing",
-          "Custom cards with multiple designs",
-          "All future updates included free",
-          "Direct WhatsApp support",
-          "No monthly or recurring subscription",
+          "Your support helps us develop new features",
+          "Improve performance and stability",
+          "Add more design templates",
+          "Provide better technical support",
+          "Continuous free updates",
+          "Growing supportive community",
         ],
         orDivider: "OR",
       }), [isAr]);
@@ -410,8 +408,6 @@ export default function ActivationGate({ onActivated, lang = "ar", onToggleLang 
     isAr ? "السلام عليكم، أريد حساباً في برنامج A7D QR" : "Hello, I'd like an account for A7D QR"
   )}`;
 
-  const subscribeLink = `https://wa.me/970566515104`;
-
   if (checking) {
     return (
       <div className="min-h-screen bg-[#06060c] flex items-center justify-center">
@@ -590,22 +586,48 @@ export default function ActivationGate({ onActivated, lang = "ar", onToggleLang 
             </h2>
             <p className="mt-2 text-center text-sm text-white/55">{t.subSubtitle}</p>
 
-            {/* Price */}
-            <div className="mt-6 flex items-end justify-center gap-1.5" data-testid="sub-price">
-              <span className="text-base font-semibold text-emerald-300/80 mb-2">
-                {t.priceCurrency}
-              </span>
-              <span className="text-6xl sm:text-7xl font-black leading-none bg-clip-text text-transparent bg-gradient-to-b from-white to-emerald-200">
-                {t.priceAmount}
-              </span>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300/90 mb-3 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/30">
-                <Icon.infinity width="14" height="14" />
-                {isAr ? "مدى الحياة" : "Lifetime"}
-              </span>
+            {/* Support Number */}
+            <div className="mt-6 flex flex-col items-center gap-4" data-testid="support-section">
+              <p className="text-center text-sm text-white/60">{t.supportNote}</p>
+              
+              {/* Payment Methods Logos */}
+              <div className="flex items-center justify-center gap-4 mb-2">
+                <div className="relative group">
+                  <img 
+                    src="/images/jawwal-pay.jpg" 
+                    alt="Jawwal Pay" 
+                    className="h-16 w-16 rounded-xl object-cover border-2 border-white/10 group-hover:border-emerald-400/50 transition-all shadow-lg"
+                  />
+                  <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-white/50 whitespace-nowrap">
+                    {t.supportMethods[0]}
+                  </span>
+                </div>
+                <span className="text-2xl text-white/40">•</span>
+                <div className="relative group">
+                  <img 
+                    src="/images/malshat.jpg" 
+                    alt="Malshat" 
+                    className="h-16 w-16 rounded-xl object-cover border-2 border-white/10 group-hover:border-emerald-400/50 transition-all shadow-lg"
+                  />
+                  <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-white/50 whitespace-nowrap">
+                    {t.supportMethods[1]}
+                  </span>
+                </div>
+              </div>
+
+              {/* Phone Number */}
+              <div className="mt-4 px-6 py-4 rounded-2xl bg-white/[0.05] border border-emerald-400/30 backdrop-blur-sm">
+                <p className="text-center text-xs text-emerald-300/70 mb-1.5 uppercase tracking-wider">
+                  {isAr ? "رقم المحفظة" : "Wallet Number"}
+                </p>
+                <p 
+                  dir="ltr" 
+                  className="text-center text-3xl font-black tracking-wider bg-clip-text text-transparent bg-gradient-to-b from-white to-emerald-200"
+                >
+                  {t.supportNumber}
+                </p>
+              </div>
             </div>
-            <p className="mt-2 text-center text-[11px] uppercase tracking-[0.2em] text-white/45">
-              {t.priceNote}
-            </p>
 
             {/* Features */}
             <ul
@@ -626,17 +648,14 @@ export default function ActivationGate({ onActivated, lang = "ar", onToggleLang 
               ))}
             </ul>
 
-            {/* Subscribe button */}
-            <a
-              href={subscribeLink}
-              target="_blank"
-              rel="noreferrer"
-              data-testid="sub-whatsapp-btn"
-              className="mt-7 w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-bold text-[#06281c] bg-gradient-to-r from-emerald-300 via-emerald-400 to-teal-300 hover:opacity-90 transition shadow-[0_10px_40px_-10px_rgba(16,185,129,0.6)]"
-            >
-              <Icon.whatsapp width="18" height="18" />
-              {t.subscribeBtn}
-            </a>
+            {/* Optional: Info Note */}
+            <div className="mt-6 text-center">
+              <p className="text-xs text-white/40 leading-relaxed">
+                {isAr 
+                  ? "شكراً لدعمك! مساهمتك تساعدنا في الاستمرار وتقديم خدمة أفضل للجميع" 
+                  : "Thank you for your support! Your contribution helps us continue and provide better service for everyone"}
+              </p>
+            </div>
           </div>
         </div>
 
