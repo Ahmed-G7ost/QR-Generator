@@ -5,21 +5,7 @@ import QrGenerator from "@/components/QrGenerator";
 import CardUploadPhase from "@/components/CardUploadPhase";
 import CardConfigurePhase from "@/components/CardConfigurePhase";
 import CardGeneratePhase from "@/components/CardGeneratePhase";
-import ActivationGate from "@/components/ActivationGate";
-import { initializeApp, getApps } from "firebase/app";
-import { getAuth, signOut } from "firebase/auth";
-
-const _fbConfig = {
-  apiKey: "AIzaSyD2Bd0m6Kd7DcvFZyNBlIKk1rXZrYjeo0o",
-  authDomain: "a7d-qr-generator.firebaseapp.com",
-  databaseURL: "https://a7d-qr-generator-default-rtdb.firebaseio.com",
-  projectId: "a7d-qr-generator",
-  storageBucket: "a7d-qr-generator.firebasestorage.app",
-  messagingSenderId: "607575246036",
-  appId: "1:607575246036:web:0c25f6434a3a946bc1a741",
-};
-const _fbApp = getApps().length === 0 ? initializeApp(_fbConfig) : getApps()[0];
-const _fbAuth = getAuth(_fbApp);
+import SupportDialog from "@/components/SupportDialog";
 
 /* --------------------------------- Logo --------------------------------- */
 const Logo = () => (
@@ -119,7 +105,7 @@ function CardStepper({ current, t }) {
 }
 
 /* ----------------------------- Sidebar Nav Items -------------------------- */
-function SidebarContent({ mode, setMode, t, lang, onSignOut, onToggleLang, onClose }) {
+function SidebarContent({ mode, setMode, t, lang, onToggleLang, onOpenSupport, onClose }) {
   const handleNav = (m) => { setMode(m); onClose && onClose(); };
   return (
     <>
@@ -184,6 +170,21 @@ function SidebarContent({ mode, setMode, t, lang, onSignOut, onToggleLang, onClo
             <span className="ms-auto h-1.5 w-1.5 rounded-full bg-cyan-400 flex-shrink-0" />
           )}
         </button>
+
+        {/* Support Us Button */}
+        <button
+          data-testid="mode-support-btn"
+          onClick={onOpenSupport}
+          className="group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all w-full text-start text-white/50 hover:text-white/80 hover:bg-white/[0.04] border border-transparent"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-all bg-white/[0.06] group-hover:bg-white/[0.1]">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" 
+                stroke="currentColor" strokeWidth="1.8" fill="none" />
+            </svg>
+          </span>
+          <span className="leading-tight">{lang === "ar" ? "ادعمنا" : "Support Us"}</span>
+        </button>
       </nav>
 
       {/* Spacer */}
@@ -201,28 +202,13 @@ function SidebarContent({ mode, setMode, t, lang, onSignOut, onToggleLang, onClo
           </span>
           {t.langToggle}
         </button>
-
-        <button
-          onClick={onSignOut}
-          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold border border-rose-400/15 bg-rose-500/[0.06] text-rose-300/80 hover:bg-rose-500/15 hover:text-rose-200 transition w-full text-start"
-          title={lang === "ar" ? "تسجيل خروج" : "Sign Out"}
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 flex-shrink-0">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M10 17l5-5-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M15 12H3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </span>
-          {lang === "ar" ? "خروج" : "Sign Out"}
-        </button>
       </div>
     </>
   );
 }
 
 /* ------------------------------ Desktop Sidebar -------------------------- */
-function DesktopSidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
+function DesktopSidebar({ mode, setMode, t, lang, onToggleLang, onOpenSupport }) {
   return (
     <aside
       className="hidden lg:flex fixed top-0 bottom-0 z-20 flex-col py-6 px-3 border-white/[0.07] bg-[#08080f]/80 backdrop-blur-xl"
@@ -238,14 +224,14 @@ function DesktopSidebar({ mode, setMode, t, lang, onSignOut, onToggleLang }) {
     >
       <SidebarContent
         mode={mode} setMode={setMode} t={t} lang={lang}
-        onSignOut={onSignOut} onToggleLang={onToggleLang}
+        onToggleLang={onToggleLang} onOpenSupport={onOpenSupport}
       />
     </aside>
   );
 }
 
 /* ------------------------------ Mobile Drawer ---------------------------- */
-function MobileDrawer({ open, onClose, mode, setMode, t, lang, onSignOut, onToggleLang }) {
+function MobileDrawer({ open, onClose, mode, setMode, t, lang, onToggleLang, onOpenSupport }) {
   // Close on ESC
   useEffect(() => {
     if (!open) return;
@@ -296,7 +282,7 @@ function MobileDrawer({ open, onClose, mode, setMode, t, lang, onSignOut, onTogg
 
         <SidebarContent
           mode={mode} setMode={setMode} t={t} lang={lang}
-          onSignOut={onSignOut} onToggleLang={onToggleLang}
+          onToggleLang={onToggleLang} onOpenSupport={onOpenSupport}
           onClose={onClose}
         />
       </aside>
@@ -310,9 +296,8 @@ export default function App() {
   const t = useMemo(() => translations[lang], [lang]);
   const [mode, setMode] = useState("qr");
   const [cardState, cardDispatch] = useReducer(cardReducer, cardInitial);
-  const [activated, setActivated] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   const toggleLang = () => setLang((l) => (l === "ar" ? "en" : "ar"));
 
@@ -328,18 +313,8 @@ export default function App() {
   const sidebarProps = {
     mode, setMode, t, lang,
     onToggleLang: toggleLang,
-    onSignOut: () => { signOut(_fbAuth).catch(() => {}); setActivated(false); setCurrentUser(null); },
+    onOpenSupport: () => { setSupportOpen(true); setDrawerOpen(false); },
   };
-
-  if (!activated) {
-    return (
-      <ActivationGate
-        lang={lang}
-        onToggleLang={toggleLang}
-        onActivated={(user) => { setCurrentUser(user); setActivated(true); }}
-      />
-    );
-  }
 
   return (
     <div
@@ -446,6 +421,13 @@ export default function App() {
           </div>
         </footer>
       </div>
+
+      {/* Support Dialog */}
+      <SupportDialog 
+        open={supportOpen} 
+        onClose={() => setSupportOpen(false)} 
+        lang={lang}
+      />
     </div>
   );
 }
