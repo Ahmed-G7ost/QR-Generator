@@ -334,8 +334,8 @@ export async function generateCardsPdf({
           
           // Ensure QR stays within card boundaries
           const halfQr = qrDim / 2;
-          const finalX = Math.max(dx + halfQr, Math.min(qrCx - halfQr, dx + drawW - qrDim));
-          const finalY = Math.max(dy + halfQr, Math.min(qrCy - halfQr, dy + drawH - qrDim));
+          const finalX = Math.max(dx, Math.min(qrCx - halfQr, dx + drawW - qrDim));
+          const finalY = Math.max(dy, Math.min(qrCy - halfQr, dy + drawH - qrDim));
           
           page.drawImage(qrImg, {
             x: finalX,
