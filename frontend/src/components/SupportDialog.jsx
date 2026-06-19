@@ -33,8 +33,8 @@ export default function SupportDialog({ open, onClose, lang = "ar" }) {
         title: "الدعم المادي",
         subtitle: "ساهم في تطوير وتحسين البرنامج",
         supportNote: "يمكنك الدعم عبر",
-        supportMethods: ["جوال باي", "مالشات"],
-        supportNumber: "0598357971",
+        supportMethods: ["مال شات"],
+        supportNumber: "0595169542",
         walletNumber: "رقم المحفظة",
         features: [
           "دعمك يساعدنا في تطوير ميزات جديدة",
@@ -50,8 +50,8 @@ export default function SupportDialog({ open, onClose, lang = "ar" }) {
         title: "Financial Support",
         subtitle: "Help us develop and improve the software",
         supportNote: "You can support via",
-        supportMethods: ["Jawwal Pay", "Malshat"],
-        supportNumber: "0598357971",
+        supportMethods: ["MaalChat"],
+        supportNumber: "0595169542",
         walletNumber: "Wallet Number",
         features: [
           "Your support helps us develop new features",
@@ -119,27 +119,16 @@ export default function SupportDialog({ open, onClose, lang = "ar" }) {
             <div className="mt-6 flex flex-col items-center gap-4">
               <p className="text-center text-sm text-white/60">{t.supportNote}</p>
               
-              {/* Payment Methods Logos */}
-              <div className="flex items-center justify-center gap-4 mb-2">
-                <div className="relative group">
-                  <img 
-                    src="/images/jawwal-pay.jpg" 
-                    alt="Jawwal Pay" 
-                    className="h-16 w-16 rounded-xl object-cover border-2 border-white/10 group-hover:border-emerald-400/50 transition-all shadow-lg"
-                  />
-                  <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-white/50 whitespace-nowrap">
-                    {t.supportMethods[0]}
-                  </span>
-                </div>
-                <span className="text-2xl text-white/40">•</span>
+              {/* Payment Method Logo */}
+              <div className="flex items-center justify-center mb-2">
                 <div className="relative group">
                   <img 
                     src="/images/malshat.jpg" 
-                    alt="Malshat" 
-                    className="h-16 w-16 rounded-xl object-cover border-2 border-white/10 group-hover:border-emerald-400/50 transition-all shadow-lg"
+                    alt="MaalChat" 
+                    className="h-20 w-20 rounded-xl object-cover border-2 border-white/10 group-hover:border-emerald-400/50 transition-all shadow-lg"
                   />
                   <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-white/50 whitespace-nowrap">
-                    {t.supportMethods[1]}
+                    {t.supportMethods[0]}
                   </span>
                 </div>
               </div>
