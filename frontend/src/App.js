@@ -6,6 +6,7 @@ import CardUploadPhase from "@/components/CardUploadPhase";
 import CardConfigurePhase from "@/components/CardConfigurePhase";
 import CardGeneratePhase from "@/components/CardGeneratePhase";
 import SupportDialog from "@/components/SupportDialog";
+import { trackVisit } from "@/lib/analytics";
 
 /* --------------------------------- Logo --------------------------------- */
 const Logo = () => (
@@ -305,6 +306,11 @@ export default function App() {
     document.documentElement.dir = t.dir;
     document.documentElement.lang = lang;
   }, [lang, t.dir]);
+
+  // Track visitor once on first load
+  useEffect(() => {
+    trackVisit();
+  }, []);
 
   const goStep = useCallback((n) => cardDispatch({ type: "SET_STEP", payload: n }), []);
 

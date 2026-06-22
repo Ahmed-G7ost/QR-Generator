@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex,nofollow" />
+<title>A7D · إحصائيات الزوار</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#06060c; --panel:rgba(255,255,255,0.03); --panel2:rgba(255,255,255,0.05);
+    --border:rgba(255,255,255,0.1); --text:#fff; --muted:rgba(255,255,255,0.55);
+    --muted-2:rgba(255,255,255,0.4); --violet:#c4b5fd; --fuchsia:#f0abfc;
+    --emerald:#6ee7b7; --cyan:#67e8f9; --rose:#fda4af; --amber:#fcd34d;
+  }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{font-family:'Tajawal',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;position:relative;}
+  .bg-fx{position:fixed;inset:0;pointer-events:none;z-index:0;}
+  .bg-fx .blob{position:absolute;border-radius:9999px;filter:blur(140px);}
+  .bg-fx .b1{top:-160px;left:-160px;width:520px;height:520px;background:rgba(139,92,246,0.20);}
+  .bg-fx .b2{top:33%;right:-130px;width:480px;height:480px;background:rgba(6,182,212,0.18);}
+  .bg-fx .b3{bottom:0;left:33%;width:420px;height:420px;background:rgba(240,171,252,0.12);}
+  .bg-fx .grid{position:absolute;inset:0;opacity:0.06;background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%);}
+
+  /* login */
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;position:relative;z-index:1;}
+  .login-card{width:100%;max-width:440px;border-radius:24px;border:1px solid var(--border);background:var(--panel);backdrop-filter:blur(20px);padding:32px;box-shadow:0 30px 120px -30px rgba(139,92,246,0.35);}
+  .icon-tile{position:relative;width:48px;height:48px;margin:0 auto 22px;}
+  .icon-tile .glow{position:absolute;inset:0;border-radius:12px;background:linear-gradient(135deg,#8b5cf6,#06b6d4);filter:blur(12px);opacity:.7;}
+  .icon-tile .face{position:relative;width:48px;height:48px;border-radius:12px;background:#0d0d18;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;}
+  h1.title{text-align:center;font-size:26px;font-weight:700;margin:0;background:linear-gradient(90deg,#c4b5fd,#67e8f9);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .subtitle{text-align:center;color:var(--muted);margin:8px 0 22px;font-size:14px;}
+  input.field{width:100%;padding:16px 20px;border-radius:16px;background:#0d0d18;border:1px solid var(--border);color:var(--text);font-size:15px;outline:none;transition:border-color .2s;font-family:inherit;}
+  input.field::placeholder{color:rgba(255,255,255,0.3);}
+  input.field:focus{border-color:rgba(139,92,246,0.6);}
+  .error-text{color:var(--rose);font-size:13px;margin-top:10px;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 24px;border-radius:16px;font-weight:700;font-size:14px;cursor:pointer;border:1px solid transparent;transition:all .15s;font-family:inherit;}
+  .btn-primary{color:#0d0d18;background:linear-gradient(90deg,#c4b5fd,#67e8f9);box-shadow:0 10px 40px -10px rgba(139,92,246,0.5);}
+  .btn-primary:hover{opacity:.9;}
+  .btn-full{width:100%;}
+  .btn-ghost{color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.06);border-color:var(--border);}
+  .btn-ghost:hover{background:rgba(255,255,255,0.12);}
+  .btn-sm{padding:9px 16px;font-size:13px;border-radius:12px;}
+
+  /* dashboard */
+  .header{padding:20px 24px;max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative;z-index:1;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .small{font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;}
+  .brand .big{font-size:18px;font-weight:700;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 60px;position:relative;z-index:1;}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:12px 0 22px;}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}}
+  .kpi{border:1px solid var(--border);background:var(--panel);border-radius:18px;padding:18px;backdrop-filter:blur(12px);}
+  .kpi .label{font-size:12px;color:var(--muted);margin-bottom:8px;}
+  .kpi .value{font-size:30px;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1;}
+  .kpi .sub{font-size:12px;color:var(--muted-2);margin-top:6px;}
+  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px;}
+  .grid2b{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+  @media(max-width:900px){.grid2,.grid2b{grid-template-columns:1fr;}}
+  .card{border:1px solid var(--border);background:var(--panel);border-radius:18px;padding:18px;backdrop-filter:blur(12px);}
+  .card h3{margin:0 0 14px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .card h3 .dot{width:8px;height:8px;border-radius:9999px;}
+  .chart-box{position:relative;height:280px;}
+  .chart-box.sm{height:240px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:right;color:var(--muted);font-weight:600;padding:10px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#0c0c14;}
+  td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,0.05);}
+  .tbl-scroll{max-height:380px;overflow:auto;}
+  .pill{display:inline-block;padding:3px 9px;border-radius:9999px;font-size:11px;font-weight:600;}
+  .pill.green{background:rgba(16,185,129,.12);color:var(--emerald);}
+  .pill.blue{background:rgba(6,182,212,.12);color:var(--cyan);}
+  .pill.violet{background:rgba(139,92,246,.14);color:var(--violet);}
+  .pill.amber{background:rgba(252,211,77,.12);color:var(--amber);}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);}
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .toolbar select{padding:9px 12px;border-radius:12px;background:#0d0d18;border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:13px;}
+  .empty{color:var(--muted-2);text-align:center;padding:30px;font-size:14px;}
+  .hidden{display:none!important;}
+  .flag{font-size:15px;margin-inline-end:6px;}
+  .live-dot{width:8px;height:8px;border-radius:9999px;background:#34d399;display:inline-block;box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5);}70%{box-shadow:0 0 0 8px rgba(52,211,153,0);}100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}}
+</style>
+</head>
+<body>
+<div class="bg-fx"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="grid"></div></div>
+
+<!-- LOGIN -->
+<div id="loginView" class="login-wrap">
+  <div class="login-card">
+    <div class="icon-tile"><div class="glow"></div><div class="face">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-6"/></svg>
+    </div></div>
+    <h1 class="title">لوحة الإحصائيات</h1>
+    <p class="subtitle">صفحة خاصة · إحصائيات زوار الموقع</p>
+    <input id="pwd" class="field" type="password" placeholder="كلمة المرور" autocomplete="off" />
+    <div id="loginErr" class="error-text hidden">كلمة المرور غير صحيحة</div>
+    <button id="loginBtn" class="btn btn-primary btn-full" style="margin-top:16px;">دخول</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashView" class="hidden">
+  <div class="header">
+    <div class="brand">
+      <div style="position:relative;width:40px;height:40px;">
+        <div style="position:absolute;inset:0;border-radius:12px;background:linear-gradient(135deg,#8b5cf6,#06b6d4);filter:blur(10px);opacity:.7;"></div>
+        <div style="position:relative;width:40px;height:40px;border-radius:12px;background:#0d0d18;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#67e8f9" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-6"/></svg>
+        </div>
+      </div>
+      <div><div class="small">A7D ANALYTICS</div><div class="big">إحصائيات الزوار</div></div>
+    </div>
+    <div class="toolbar">
+      <span class="mono"><span class="live-dot"></span> <span id="liveLabel">مباشر</span></span>
+      <select id="rangeSel">
+        <option value="7">آخر 7 أيام</option>
+        <option value="14">آخر 14 يوم</option>
+        <option value="30" selected>آخر 30 يوم</option>
+        <option value="90">آخر 90 يوم</option>
+      </select>
+      <button id="refreshBtn" class="btn btn-ghost btn-sm">تحديث</button>
+      <button id="logoutBtn" class="btn btn-ghost btn-sm">خروج</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="loadingMsg" class="empty">جارٍ تحميل البيانات…</div>
+
+    <div id="content" class="hidden">
+      <!-- KPIs -->
+      <div class="kpis">
+        <div class="kpi"><div class="label">إجمالي الزيارات</div><div class="value" id="kpiVisits">0</div><div class="sub" id="kpiVisitsSub">كل الوقت</div></div>
+        <div class="kpi"><div class="label">الزوار الفريدون</div><div class="value" id="kpiUnique">0</div><div class="sub">أجهزة مختلفة</div></div>
+        <div class="kpi"><div class="label">زيارات اليوم</div><div class="value" id="kpiToday">0</div><div class="sub" id="kpiTodaySub">—</div></div>
+        <div class="kpi"><div class="label">زوار جدد اليوم</div><div class="value" id="kpiNewToday">0</div><div class="sub">لأول مرة</div></div>
+        <div class="kpi"><div class="label">مرات استخدام الأدوات</div><div class="value" id="kpiUses">0</div><div class="sub">QR + البطاقات</div></div>
+      </div>
+
+      <!-- charts row 1 -->
+      <div class="grid2">
+        <div class="card"><h3><span class="dot" style="background:#67e8f9"></span> الزيارات اليومية</h3><div class="chart-box"><canvas id="chartDaily"></canvas></div></div>
+        <div class="card"><h3><span class="dot" style="background:#c4b5fd"></span> أعلى الدول</h3><div class="chart-box"><canvas id="chartCountry"></canvas></div></div>
+      </div>
+
+      <!-- charts row 2 -->
+      <div class="grid2b">
+        <div class="card"><h3><span class="dot" style="background:#6ee7b7"></span> نوع الجهاز والمتصفح</h3><div class="chart-box sm"><canvas id="chartDevice"></canvas></div></div>
+        <div class="card"><h3><span class="dot" style="background:#fcd34d"></span> استخدام الأدوات</h3><div class="chart-box sm"><canvas id="chartTools"></canvas></div></div>
+      </div>
+
+      <!-- tables -->
+      <div class="grid2b">
+        <div class="card">
+          <h3><span class="dot" style="background:#f0abfc"></span> أحدث الزيارات</h3>
+          <div class="tbl-scroll">
+            <table><thead><tr><th>الوقت</th><th>الدولة / المدينة</th><th>الجهاز</th><th>المتصفح</th><th>النوع</th></tr></thead>
+            <tbody id="recentBody"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3><span class="dot" style="background:#67e8f9"></span> أكثر الزوار نشاطاً</h3>
+          <div class="tbl-scroll">
+            <table><thead><tr><th>الزائر</th><th>الدولة</th><th>زيارات</th><th>QR</th><th>بطاقات</th><th>آخر دخول</th></tr></thead>
+            <tbody id="visitorsBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+/* ===== CONFIG ===== */
+const STATS_PASSWORD = "A7D-Stats-2026@@";  // كلمة مرور صفحة الإحصائيات (غيّرها متى شئت)
+const firebaseConfig = {
+  apiKey: "AIzaSyD2Bd0m6Kd7DcvFZyNBlIKk1rXZrYjeo0o",
+  authDomain: "a7d-qr-generator.firebaseapp.com",
+  databaseURL: "https://a7d-qr-generator-default-rtdb.firebaseio.com",
+  projectId: "a7d-qr-generator",
+  storageBucket: "a7d-qr-generator.firebasestorage.app",
+  messagingSenderId: "607575246036",
+  appId: "1:607575246036:web:0c25f6434a3a946bc1a741",
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const $ = (id) => document.getElementById(id);
+const SESSION_KEY = "a7d_stats_auth";
+
+/* ===== AUTH ===== */
+function showDash(){ $("loginView").classList.add("hidden"); $("dashView").classList.remove("hidden"); startLive(); }
+function tryLogin(){
+  if($("pwd").value === STATS_PASSWORD){
+    try{ sessionStorage.setItem(SESSION_KEY,"1"); }catch(e){}
+    $("loginErr").classList.add("hidden");
+    showDash();
+  }else{
+    $("loginErr").classList.remove("hidden");
+  }
+}
+$("loginBtn").addEventListener("click", tryLogin);
+$("pwd").addEventListener("keydown",(e)=>{ if(e.key==="Enter") tryLogin(); });
+$("logoutBtn").addEventListener("click",()=>{ try{sessionStorage.removeItem(SESSION_KEY);}catch(e){} location.reload(); });
+$("refreshBtn").addEventListener("click",()=> loadOnce());
+$("rangeSel").addEventListener("change",()=> render());
+try{ if(sessionStorage.getItem(SESSION_KEY)==="1") showDash(); }catch(e){}
+
+/* ===== DATA ===== */
+let DATA = { visits:[], visitors:[], daily:[], eventCounts:[] };
+let charts = {};
+let liveBound = false;
+
+function normalize(snapVal){
+  const v = snapVal || {};
+  const visitsObj = v.visits || {};
+  const visitorsObj = v.visitors || {};
+  const dailyObj = v.daily || {};
+  const ecObj = v.eventCounts || {};
+  DATA.visits = Object.values(visitsObj);
+  DATA.visitors = Object.values(visitorsObj);
+  DATA.daily = Object.values(dailyObj);
+  DATA.eventCounts = Object.values(ecObj);
+}
+
+async function loadOnce(){
+  $("loadingMsg").classList.remove("hidden"); $("content").classList.add("hidden");
+  try{
+    const snap = await get(ref(db,"analytics"));
+    normalize(snap.exists()? snap.val() : {});
+    render();
+  }catch(e){
+    $("loadingMsg").textContent = "تعذّر تحميل البيانات: " + (e.message||e);
+  }
+}
+function startLive(){
+  if(liveBound){ return; }
+  liveBound = true;
+  onValue(ref(db,"analytics"),(snap)=>{
+    normalize(snap.exists()? snap.val() : {});
+    render();
+  },(err)=>{ $("loadingMsg").textContent = "تعذّر الاتصال: "+(err.message||err); });
+}
+
+/* ===== HELPERS ===== */
+function todayStr(){ const d=new Date(); const p=(n)=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function fmtTime(ts){ if(!ts) return "—"; const d=new Date(ts); return d.toLocaleString("ar-EG",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
+function flagEmoji(cc){ if(!cc||cc.length!==2) return ""; const A=0x1F1E6; return String.fromCodePoint(...[...cc.toUpperCase()].map(c=>A+c.charCodeAt(0)-65)); }
+function lastNDays(n){ const out=[]; const d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d); t.setDate(d.getDate()-i); const p=(x)=>String(x).padStart(2,"0"); out.push(`${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())}`); } return out; }
+function destroy(name){ if(charts[name]){ charts[name].destroy(); delete charts[name]; } }
+Chart.defaults.color = "rgba(255,255,255,0.6)";
+Chart.defaults.font.family = "'Tajawal',sans-serif";
+
+/* ===== RENDER ===== */
+function render(){
+  $("loadingMsg").classList.add("hidden");
+  $("content").classList.remove("hidden");
+
+  const today = todayStr();
+  const totalVisits = DATA.visits.length || DATA.daily.reduce((a,d)=>a+(d.visits||0),0);
+  const unique = DATA.visitors.length;
+  const todayRow = DATA.daily.find(d=>d.date===today) || {visits:0,newVisitors:0};
+  const totalUses = DATA.eventCounts.reduce((a,e)=>a+(e.count||0),0);
+
+  $("kpiVisits").textContent = totalVisits.toLocaleString("en");
+  $("kpiUnique").textContent = unique.toLocaleString("en");
+  $("kpiToday").textContent = (todayRow.visits||0).toLocaleString("en");
+  $("kpiTodaySub").textContent = today;
+  $("kpiNewToday").textContent = (todayRow.newVisitors||0).toLocaleString("en");
+  $("kpiUses").textContent = totalUses.toLocaleString("en");
+
+  renderDaily();
+  renderCountries();
+  renderDevices();
+  renderTools();
+  renderRecent();
+  renderVisitors();
+}
+
+function renderDaily(){
+  const n = parseInt($("rangeSel").value,10);
+  const days = lastNDays(n);
+  const map = {}; DATA.daily.forEach(d=> map[d.date]=d);
+  // fallback: build from visits if daily missing
+  if(DATA.daily.length===0 && DATA.visits.length){
+    DATA.visits.forEach(v=>{ map[v.date]=map[v.date]||{visits:0,newVisitors:0}; map[v.date].visits++; if(v.isNew) map[v.date].newVisitors++; });
+  }
+  const visits = days.map(d=> (map[d]&&map[d].visits)||0);
+  const news = days.map(d=> (map[d]&&map[d].newVisitors)||0);
+  $("kpiVisitsSub").textContent = `آخر ${n} يوم: ${visits.reduce((a,b)=>a+b,0)}`;
+  destroy("daily");
+  charts.daily = new Chart($("chartDaily"),{
+    type:"line",
+    data:{ labels:days.map(d=>d.slice(5)), datasets:[
+      {label:"الزيارات",data:visits,borderColor:"#67e8f9",backgroundColor:"rgba(103,232,249,.12)",fill:true,tension:.35,pointRadius:2},
+      {label:"زوار جدد",data:news,borderColor:"#c4b5fd",backgroundColor:"rgba(196,181,253,.10)",fill:true,tension:.35,pointRadius:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom"}},scales:{x:{grid:{color:"rgba(255,255,255,.05)"}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,.05)"},ticks:{precision:0}}}}
+  });
+}
+
+function renderCountries(){
+  const counts = {};
+  DATA.visits.forEach(v=>{ const c=v.country||"Unknown"; counts[c]=counts[c]||{n:0,cc:v.countryCode||""}; counts[c].n++; });
+  if(Object.keys(counts).length===0){ DATA.visitors.forEach(v=>{ const c=v.country||"Unknown"; counts[c]=counts[c]||{n:0,cc:v.countryCode||""}; counts[c].n++; }); }
+  const arr = Object.entries(counts).map(([k,v])=>({c:k,n:v.n,cc:v.cc})).sort((a,b)=>b.n-a.n).slice(0,8);
+  destroy("country");
+  const palette=["#67e8f9","#c4b5fd","#f0abfc","#6ee7b7","#fcd34d","#fda4af","#93c5fd","#fdba74"];
+  charts.country = new Chart($("chartCountry"),{
+    type:"doughnut",
+    data:{ labels:arr.map(a=> (flagEmoji(a.cc)+" "+a.c).trim()), datasets:[{data:arr.map(a=>a.n),backgroundColor:palette,borderColor:"#0c0c14",borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"58%",plugins:{legend:{position:"right",labels:{boxWidth:12,font:{size:11}}}}}
+  });
+}
+
+function renderDevices(){
+  const dev={Desktop:0,Mobile:0}; const br={};
+  DATA.visits.forEach(v=>{ if(v.deviceType) dev[v.deviceType]=(dev[v.deviceType]||0)+1; if(v.browser) br[v.browser]=(br[v.browser]||0)+1; });
+  const brArr=Object.entries(br).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  destroy("device");
+  charts.device = new Chart($("chartDevice"),{
+    type:"bar",
+    data:{ labels:["سطح المكتب","الجوال",...brArr.map(b=>b[0])],
+      datasets:[{label:"زيارات",data:[dev.Desktop||0,dev.Mobile||0,...brArr.map(b=>b[1])],
+        backgroundColor:["#67e8f9","#c4b5fd","#6ee7b7","#fcd34d","#fda4af","#f0abfc","#93c5fd"],borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,grid:{color:"rgba(255,255,255,.05)"},ticks:{precision:0}}}}
+  });
+}
+
+function renderTools(){
+  const labelMap={qr_generate:"توليد QR",card_generate:"توليد البطاقات"};
+  const arr = DATA.eventCounts.map(e=>({a:labelMap[e.action]||e.action,n:e.count||0})).sort((a,b)=>b.n-a.n);
+  destroy("tools");
+  charts.tools = new Chart($("chartTools"),{
+    type:"bar",
+    data:{ labels:arr.length?arr.map(a=>a.a):["لا يوجد"], datasets:[{label:"مرات",data:arr.length?arr.map(a=>a.n):[0],backgroundColor:["#fcd34d","#6ee7b7","#67e8f9","#c4b5fd"],borderRadius:6}]},
+    options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:"rgba(255,255,255,.05)"},ticks:{precision:0}},y:{grid:{display:false}}}}
+  });
+}
+
+function renderRecent(){
+  const rows = [...DATA.visits].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,60);
+  const body=$("recentBody");
+  if(!rows.length){ body.innerHTML='<tr><td colspan="5"><div class="empty">لا توجد زيارات بعد</div></td></tr>'; return; }
+  body.innerHTML = rows.map(v=>{
+    const loc = (v.country||"Unknown") + (v.city? " · "+v.city : "");
+    const typePill = v.isNew? '<span class="pill green">جديد</span>':'<span class="pill blue">عائد</span>';
+    return `<tr>
+      <td class="mono">${fmtTime(v.ts)}</td>
+      <td><span class="flag">${flagEmoji(v.countryCode)}</span>${loc}</td>
+      <td>${v.os||"—"} <span class="mono">${v.deviceType||""}</span></td>
+      <td>${v.browser||"—"}</td>
+      <td>${typePill}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderVisitors(){
+  const rows = [...DATA.visitors].sort((a,b)=>(b.visitCount||0)-(a.visitCount||0)).slice(0,60);
+  const body=$("visitorsBody");
+  if(!rows.length){ body.innerHTML='<tr><td colspan="6"><div class="empty">لا يوجد زوار بعد</div></td></tr>'; return; }
+  body.innerHTML = rows.map(v=>{
+    const id=(v.visitorId||"").replace("vis_","").slice(0,8);
+    const qr=(v.usage&&v.usage.qr_generate)||0;
+    const card=(v.usage&&v.usage.card_generate)||0;
+    return `<tr>
+      <td class="mono">${id||"—"}</td>
+      <td><span class="flag">${flagEmoji(v.countryCode)}</span>${v.country||"—"}</td>
+      <td><span class="pill violet">${v.visitCount||0}</span></td>
+      <td>${qr? '<span class="pill amber">'+qr+'</span>':'<span class="mono">0</span>'}</td>
+      <td>${card? '<span class="pill green">'+card+'</span>':'<span class="mono">0</span>'}</td>
+      <td class="mono">${fmtTime(v.lastSeen)}</td>
+    </tr>`;
+  }).join("");
+}
+</script>
+</body>
+</html>

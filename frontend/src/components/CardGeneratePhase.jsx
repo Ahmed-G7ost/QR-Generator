@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { generateCardsPdf, downloadPdfBlob, PHASES } from "@/lib/cardProcessor";
+import { trackEvent } from "@/lib/analytics";
 
 export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, onReset }) {
   const [generating, setGenerating] = useState(false);
@@ -27,6 +28,7 @@ export default function CardGeneratePhase({ t, lang, state, dispatch, onBack, on
         });
       pdfBytesRef.current = { pdfBytes, filename };
       setResult({ total_records: totalRecords, total_pages: totalPages, file_size_kb: fileSizeKb });
+      trackEvent("card_generate", { records: totalRecords, pages: totalPages });
       setProgress(100);
     } catch (err) {
       console.error(err);

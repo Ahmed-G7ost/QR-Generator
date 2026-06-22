@@ -9,6 +9,7 @@ import {
 import QrStyleCustomizer from "@/components/QrStyleCustomizer";
 import * as pdfjsLib from "pdfjs-dist/build/pdf";
 import QRCode from "qrcode";
+import { trackEvent } from "@/lib/analytics";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL || ""}/pdf.worker.min.js`;
 
@@ -520,6 +521,7 @@ export default function QrGenerator({ t, lang }) {
         cancelToken, onProgress: (p) => setStatus((s) => ({ ...s, ...p })),
       });
       setResult({ bytes: pdfBytes, filename, count: itemsCount });
+      trackEvent("qr_generate", { count: itemsCount });
       setStatus((s) => ({ ...s, phase: PHASES.DONE, percent: 100, current: itemsCount, total: itemsCount }));
     } catch (e) {
       if (isCancelledError(e)) { resetAll(); return; }
